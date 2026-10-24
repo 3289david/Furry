@@ -1,15 +1,15 @@
 @echo off
 setlocal enabledelayedexpansion
-title Mochi-Puff 3D Virtual Pet
+title Mochi-Puff Virtual Pet
 echo ======================================================================
-echo   Mochi-Puff AI 3D Virtual Pet - Desktop App Launcher
+echo   Mochi-Puff AI Virtual Pet - Desktop App Launcher
 echo ======================================================================
 echo.
 
 where node >nul 2>nul
 if %ERRORLEVEL% neq 0 (
   echo [ERROR] Node.js is not found in your system PATH.
-  echo Please install Node.js (v18+ or v20 LTS) from https://nodejs.org
+  echo Please install Node.js v18+ or v20 LTS from https://nodejs.org
   echo.
   pause
   exit /b 1
@@ -30,7 +30,7 @@ if not exist dist (
 )
 
 echo [3/3] Starting Mochi-Puff Desktop Server on port 3000...
-start /min "Mochi-Puff Server" node server.js
+start "" /min "Mochi-Puff Server" cmd /c "node server.js"
 
 timeout /t 2 /nobreak >nul
 
