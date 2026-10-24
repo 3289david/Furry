@@ -82,6 +82,7 @@ html, body {
 /* ==========================================================================
    1. ULTRA-MINIMAL HOME INTERFACE (ONLY CORNER GEAR BUTTON + CHAT INPUT)
    ========================================================================== */
+#ui-root,
 .pet-ui-layer {
   position: fixed;
   inset: 0;
@@ -464,10 +465,12 @@ body.compact-pet-mode .chat-dock {
   border-color: #38bdf8;
 }
 
-.dock-mic-btn.recording {
+.dock-mic-btn.recording,
+.dock-mic-btn.talk-mode-active {
   background: rgba(244, 63, 94, 0.35);
   border-color: #fb7185;
   color: #ffffff;
+  box-shadow: 0 0 16px rgba(251, 113, 133, 0.45);
 }
 
 .chat-text-input {

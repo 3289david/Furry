@@ -672,6 +672,30 @@ async function startServer() {
         }
       }
 
+      if (pathname === '/style.css') {
+        const cssPath = path.join(__dirname, 'style.css');
+        if (fs.existsSync(cssPath)) {
+          res.writeHead(200, {
+            'Content-Type': 'text/css; charset=utf-8',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          });
+          fs.createReadStream(cssPath).pipe(res);
+          return;
+        }
+      }
+
+      if (pathname === '/sw.js') {
+        const swPath = path.join(__dirname, 'sw.js');
+        if (fs.existsSync(swPath)) {
+          res.writeHead(200, {
+            'Content-Type': 'application/javascript; charset=utf-8',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          });
+          fs.createReadStream(swPath).pipe(res);
+          return;
+        }
+      }
+
       if (vite) {
         vite.middlewares(req, res, () => {
           res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -713,7 +737,7 @@ async function startServer() {
 
       res.writeHead(200, {
         'Content-Type': contentType,
-        'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+        'Cache-Control': 'no-cache, must-revalidate',
       });
 
       const stream = fs.createReadStream(filePath);

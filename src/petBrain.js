@@ -138,6 +138,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
     isRecordingMic: false,
     isTranscribing: false,
     isSpeaking: false,
+    isTalkMode: false,
     micPermission: 'prompt', // 'prompt' | 'granted' | 'denied' | 'unavailable'
     micInputLevel: 0,
     voiceAmplitude: 0,
@@ -327,6 +328,17 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
     return audioCtx;
   }
 
+  let talkModeResumeTimer = null;
+  function scheduleTalkResume(delayMs = 450) {
+    if (!state.isTalkMode) return;
+    if (talkModeResumeTimer) clearTimeout(talkModeResumeTimer);
+    talkModeResumeTimer = setTimeout(async () => {
+      if (state.isTalkMode && !state.isSpeaking && !state.isRecordingMic && !state.isChatLoading && !state.isTranscribing) {
+        await startRecording();
+      }
+    }, delayMs);
+  }
+
   function stopSpeaking() {
     if (currentAudioEl) {
       try {
@@ -353,6 +365,11 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
       setBehavior('idle');
     }
     notifyUpdate();
+
+    // If Talk Mode is active, automatically resume listening like a real conversation
+    if (state.isTalkMode) {
+      scheduleTalkResume(450);
+    }
   }
 
   async function speakText(text, emotion = 'happy') {
@@ -537,6 +554,11 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
       };
 
       const ctx = ensureAudioContext();
+      let speechStarted = false;
+      let speechStartTime = 0;
+      let lastSpeechTime = 0;
+      const recordingStartTime = Date.now();
+
       if (ctx) {
         const source = ctx.createMediaStreamSource(micStream);
         micAnalyser = ctx.createAnalyser();
@@ -548,8 +570,33 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
           micAnalyser.getByteFrequencyData(micDataArray);
           let sum = 0;
           for (let i = 0; i < micDataArray.length; i++) sum += micDataArray[i];
-          state.micInputLevel = Math.min(1.0, sum / (micDataArray.length * 140));
+          const inputLevel = Math.min(1.0, sum / (micDataArray.length * 140));
+          state.micInputLevel = inputLevel;
           notifyUpdate();
+
+          // Continuous hands-free Voice Activity Detection in Talk Mode
+          if (state.isTalkMode && state.isRecordingMic && !state.isTranscribing && !state.isChatLoading && !state.isSpeaking) {
+            const now = Date.now();
+            if (inputLevel > 0.08) {
+              if (!speechStarted) {
+                speechStarted = true;
+                speechStartTime = now;
+              }
+              lastSpeechTime = now;
+            }
+
+            if (speechStarted) {
+              const speechDuration = now - speechStartTime;
+              const silenceDuration = now - lastSpeechTime;
+              // If user spoke for at least 250ms and has paused for 1.2s:
+              if (speechDuration > 250 && silenceDuration > 1200) {
+                stopRecordingAndSend();
+              } else if (now - recordingStartTime > 14000) {
+                // Safety max per turn
+                stopRecordingAndSend();
+              }
+            }
+          }
         }, 60);
       }
 
@@ -567,6 +614,9 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
         state.profile.language === 'ko'
           ? '마이크 권한이 거부되었거나 사용할 수 없어요. 브라우저 권한을 확인하거나 텍스트로 대화해 주세요!'
           : 'Microphone access is unavailable or denied. Mochi cannot hear right now — please check mic permissions or type below!';
+      if (state.isTalkMode) {
+        state.isTalkMode = false;
+      }
       notifyUpdate();
       return false;
     }
@@ -597,6 +647,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
         if (micChunks.length === 0) {
           setBehavior('idle');
           notifyUpdate();
+          if (state.isTalkMode) scheduleTalkResume(600);
           resolve(null);
           return;
         }
@@ -605,6 +656,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
         if (audioBlob.size < 400) {
           setBehavior('idle');
           notifyUpdate();
+          if (state.isTalkMode) scheduleTalkResume(600);
           resolve(null);
           return;
         }
@@ -643,6 +695,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
                 : 'I could not quite catch that! Could you try speaking again or typing below?';
             setBehavior('idle');
             notifyUpdate();
+            if (state.isTalkMode) scheduleTalkResume(1000);
             resolve(null);
           }
         } catch (err) {
@@ -650,6 +703,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
           state.lastError = err.message || 'Voice transcription failed.';
           setBehavior('idle');
           notifyUpdate();
+          if (state.isTalkMode) scheduleTalkResume(1500);
           resolve(null);
         }
       };
@@ -660,9 +714,46 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
         cleanupMicStream();
         state.isRecordingMic = false;
         notifyUpdate();
+        if (state.isTalkMode) scheduleTalkResume(600);
         resolve(null);
       }
     });
+  }
+
+  async function startTalkMode() {
+    state.isTalkMode = true;
+    state.lastError = null;
+    notifyUpdate();
+    const ok = await startRecording();
+    if (!ok) {
+      state.isTalkMode = false;
+      notifyUpdate();
+    }
+  }
+
+  function stopTalkMode() {
+    state.isTalkMode = false;
+    if (talkModeResumeTimer) {
+      clearTimeout(talkModeResumeTimer);
+      talkModeResumeTimer = null;
+    }
+    if (state.isRecordingMic) {
+      cleanupMicStream();
+      state.isRecordingMic = false;
+    }
+    if (state.isSpeaking) {
+      stopSpeaking();
+    }
+    setBehavior('idle');
+    notifyUpdate();
+  }
+
+  async function toggleTalkMode() {
+    if (state.isTalkMode) {
+      stopTalkMode();
+    } else {
+      await startTalkMode();
+    }
   }
 
   function blobToBase64(blob) {
@@ -1013,6 +1104,9 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
     sendUserMessage,
     startRecording,
     stopRecordingAndSend,
+    startTalkMode,
+    stopTalkMode,
+    toggleTalkMode,
     stopSpeaking,
     speakText,
     notifyDirectTouch,

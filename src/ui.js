@@ -235,6 +235,11 @@ export function createMinimalUI(container, state, onChange) {
 
   setupCard.appendChild(setupForm);
   setupBackdrop.appendChild(setupCard);
+  setupBackdrop.addEventListener('click', (e) => {
+    if (e.target === setupBackdrop) {
+      completeSetup(false);
+    }
+  });
   container.appendChild(setupBackdrop);
 
   function openWelcomeSetupModal() {
@@ -248,16 +253,15 @@ export function createMinimalUI(container, state, onChange) {
   }
 
   function checkFirstRunSetup() {
-    const done = localStorage.getItem('mochi_first_run_completed') === 'true';
-    if (!done) {
-      openWelcomeSetupModal();
-    }
+    // Keep home HUD immediately visible without blocking modal overlay
+    localStorage.setItem('mochi_first_run_completed', 'true');
   }
 
   // =========================================================================
   // 1. HOME SCREEN: ONLY SINGLE TOP-RIGHT GEAR ICON BUTTON
   // =========================================================================
   const topBar = document.createElement('div');
+  topBar.id = 'pet-top-bar';
   topBar.className = 'home-corner-bar';
 
   const settingsBtn = document.createElement('button');
@@ -350,22 +354,13 @@ export function createMinimalUI(container, state, onChange) {
     <span>Talk</span>
   `;
 
-  let micHoldStart = 0;
-  micBtn.addEventListener('pointerdown', async (e) => {
+  micBtn.addEventListener('click', async (e) => {
     e.preventDefault();
     if (!petBrain) return;
-    if (petBrain.state.isRecordingMic) {
-      await petBrain.stopRecordingAndSend();
+    if (petBrain.state.isTalkMode) {
+      petBrain.stopTalkMode();
     } else {
-      micHoldStart = Date.now();
-      await petBrain.startRecording();
-    }
-  });
-
-  window.addEventListener('pointerup', async () => {
-    if (!petBrain || !petBrain.state.isRecordingMic) return;
-    if (Date.now() - micHoldStart > 350) {
-      await petBrain.stopRecordingAndSend();
+      await petBrain.startTalkMode();
     }
   });
 
@@ -564,6 +559,8 @@ export function createMinimalUI(container, state, onChange) {
   }
 
   function addSlider(parent, key, labelText, min, max, step, formatFn) {
+    const initialVal = clampNumber(state[key], min, max, min);
+    state[key] = initialVal;
     const row = document.createElement('div');
     row.className = 'control-row';
     const labelRow = document.createElement('div');
@@ -573,7 +570,7 @@ export function createMinimalUI(container, state, onChange) {
     lbl.textContent = labelText;
     const valSpan = document.createElement('span');
     valSpan.className = 'control-val';
-    valSpan.textContent = formatFn(state[key]);
+    valSpan.textContent = formatFn(initialVal);
     labelRow.appendChild(lbl);
     labelRow.appendChild(valSpan);
 
@@ -582,7 +579,7 @@ export function createMinimalUI(container, state, onChange) {
     input.min = String(min);
     input.max = String(max);
     input.step = String(step);
-    input.value = String(state[key]);
+    input.value = String(initialVal);
     input.setAttribute('aria-label', labelText);
     input.addEventListener('input', () => {
       const sanitized = clampNumber(input.value, min, max, state[key]);
@@ -594,7 +591,7 @@ export function createMinimalUI(container, state, onChange) {
     row.appendChild(labelRow);
     row.appendChild(input);
     parent.appendChild(row);
-    sliderRefs[key] = { input, valSpan, formatFn };
+    sliderRefs[key] = { input, valSpan, formatFn, min, max };
   }
 
   function addColorPicker(parentGrid, key, labelText) {
@@ -1289,23 +1286,44 @@ export function createMinimalUI(container, state, onChange) {
   }
 
   function renderChatAndStatus(brainState) {
-    // Mic Button State (Clean No-Emoji)
-    if (brainState.isRecordingMic) {
-      micBtn.innerHTML = `<span class="mic-rec-indicator"></span> <span>Stop</span>`;
-      micBtn.classList.add('recording');
-    } else if (brainState.isTranscribing) {
-      micBtn.innerHTML = `<span class="mic-spin-indicator"></span> <span>Transcribing...</span>`;
-      micBtn.classList.remove('recording');
+    // Mic / Talk Mode Button State (Clean No-Emoji)
+    if (brainState.isTalkMode) {
+      micBtn.classList.add('talk-mode-active');
+      if (brainState.isRecordingMic) {
+        micBtn.innerHTML = `<span class="mic-rec-indicator"></span> <span>Talk: Listening</span>`;
+        micBtn.classList.add('recording');
+      } else if (brainState.isTranscribing) {
+        micBtn.innerHTML = `<span class="mic-spin-indicator"></span> <span>Transcribing...</span>`;
+        micBtn.classList.remove('recording');
+      } else if (brainState.isChatLoading) {
+        micBtn.innerHTML = `<span class="mic-spin-indicator"></span> <span>Thinking...</span>`;
+        micBtn.classList.remove('recording');
+      } else if (brainState.isSpeaking) {
+        micBtn.innerHTML = `<span class="mic-rec-indicator"></span> <span>Talk: Speaking</span>`;
+        micBtn.classList.remove('recording');
+      } else {
+        micBtn.innerHTML = `<span class="mic-rec-indicator"></span> <span>Talk: Active</span>`;
+        micBtn.classList.remove('recording');
+      }
     } else {
-      micBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-          <line x1="12" x2="12" y1="19" y2="22"></line>
-        </svg>
-        <span>Talk</span>
-      `;
-      micBtn.classList.remove('recording');
+      micBtn.classList.remove('talk-mode-active');
+      if (brainState.isRecordingMic) {
+        micBtn.innerHTML = `<span class="mic-rec-indicator"></span> <span>Stop</span>`;
+        micBtn.classList.add('recording');
+      } else if (brainState.isTranscribing) {
+        micBtn.innerHTML = `<span class="mic-spin-indicator"></span> <span>Transcribing...</span>`;
+        micBtn.classList.remove('recording');
+      } else {
+        micBtn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" x2="12" y1="19" y2="22"></line>
+          </svg>
+          <span>Talk</span>
+        `;
+        micBtn.classList.remove('recording');
+      }
     }
 
     // Input state
@@ -1355,8 +1373,11 @@ export function createMinimalUI(container, state, onChange) {
     syncUI() {
       Object.keys(sliderRefs).forEach((k) => {
         if (state[k] !== undefined) {
-          sliderRefs[k].input.value = String(state[k]);
-          sliderRefs[k].valSpan.textContent = sliderRefs[k].formatFn(state[k]);
+          const ref = sliderRefs[k];
+          const safeVal = clampNumber(state[k], ref.min, ref.max, ref.min);
+          state[k] = safeVal;
+          ref.input.value = String(safeVal);
+          ref.valSpan.textContent = ref.formatFn(safeVal);
         }
       });
       Object.keys(colorRefs).forEach((k) => {
@@ -1368,7 +1389,8 @@ export function createMinimalUI(container, state, onChange) {
         Object.keys(accButtons).forEach((k) => accButtons[k].classList.toggle('active', k === (state.accessory || 'none')));
       }
       if (state.eyeColor) {
-        Object.keys(eyeButtons).forEach((k) => eyeButtons[k].classList.toggle('active', k.toLowerCase() === state.eyeColor.toLowerCase()));
+        const targetEye = String(state.eyeColor || '').toLowerCase();
+        Object.keys(eyeButtons).forEach((k) => eyeButtons[k].classList.toggle('active', k.toLowerCase() === targetEye));
       }
     },
     setGPUFurEnabled(enabled) {

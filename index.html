@@ -13,7 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="./icon.svg" />
   <link rel="manifest" href="./manifest.json" />
   <meta name="theme-color" content="#161829" />
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="/style.css?v=3" />
 </head>
 <body>
   <nav id="page-nav" aria-label="Simulation Switcher">
@@ -24,13 +24,28 @@
   <div id="canvas-container" aria-label="Interactive 3D GPU Fur Simulation"></div>
   <aside id="ui-root" aria-label="Fur and Lighting Controls"></aside>
   <div id="hud-hint" aria-live="polite"></div>
-  <script type="module" src="./src/main.js"></script>
   <script>
-    if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-      });
-    }
+    (function () {
+      try {
+        if ('caches' in window) {
+          caches.keys().then(function (keys) {
+            keys.forEach(function (k) { caches.delete(k); });
+          });
+        }
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            var hadActive = Boolean(navigator.serviceWorker.controller);
+            Promise.all(regs.map(function (r) { return r.unregister(); })).then(function (results) {
+              if (hadActive && results.some(Boolean) && !sessionStorage.getItem('mochi_sw_purged_v3')) {
+                sessionStorage.setItem('mochi_sw_purged_v3', '1');
+                window.location.reload();
+              }
+            });
+          });
+        }
+      } catch (e) {}
+    })();
   </script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
