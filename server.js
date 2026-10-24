@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = Number(process.env.PORT) || 3000;
-const HOST = '0.0.0.0';
+const HOST = process.env.HOST || '0.0.0.0';
 const IS_DEV = process.argv.includes('--dev') || process.env.NODE_ENV === 'development';
 const DIST_DIR = path.join(__dirname, 'dist');
 
@@ -212,7 +212,10 @@ async function handleChatEndpoint(req, res) {
     if (!rawBaseUrl) {
       throw Object.assign(new Error('Custom Chat Base URL is required when using OpenAI-compatible chat.'), { statusCode: 400 });
     }
-    const customModel = String(chatConfig.model || providerConfig.model || 'gpt-4o-mini').trim();
+    const customModel = String(chatConfig.model || providerConfig.model || '').trim();
+    if (!customModel) {
+      throw Object.assign(new Error('Custom Chat Model Name is required. Enter a model ID supported by your provider.'), { statusCode: 400 });
+    }
     const apiKey = chatConfig.apiKey || providerConfig.apiKey || process.env.CUSTOM_API_KEY || process.env.OPENAI_API_KEY || '';
 
     const oaMessages = [
@@ -255,7 +258,6 @@ async function handleChatEndpoint(req, res) {
         model: customModel,
         messages: oaMessages,
         temperature: 0.85,
-        response_format: { type: 'json_object' },
       }),
     });
 

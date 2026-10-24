@@ -732,7 +732,7 @@ export function createMinimalUI(container, state, onChange) {
     const modelInput = document.createElement('input');
     modelInput.type = 'text';
     modelInput.className = 'settings-text-input';
-    modelInput.placeholder = 'e.g. gpt-4o-mini, whisper-1, tts-1';
+    modelInput.placeholder = 'Exact model ID supported by this provider';
     modelRow.appendChild(modelLabel);
     modelRow.appendChild(modelInput);
     customFields.appendChild(modelRow);
@@ -909,15 +909,19 @@ export function createMinimalUI(container, state, onChange) {
 
   const proactiveBtn = document.createElement('button');
   proactiveBtn.type = 'button';
-  proactiveBtn.className = 'action-btn active';
-  proactiveBtn.textContent = 'Spontaneous Chat: ON';
+  proactiveBtn.className = 'action-btn';
+  function syncProactiveChatButton() {
+    const enabled = Boolean(petBrain?.state.profile.proactiveChatEnabled);
+    proactiveBtn.textContent = `Spontaneous Chat: ${enabled ? 'ON' : 'OFF'}`;
+    proactiveBtn.classList.toggle('active', enabled);
+  }
   proactiveBtn.addEventListener('click', () => {
     if (!petBrain) return;
     const next = !petBrain.state.profile.proactiveChatEnabled;
     petBrain.updateProfile({ proactiveChatEnabled: next });
-    proactiveBtn.textContent = next ? 'Spontaneous Chat: ON' : 'Spontaneous Chat: OFF';
-    proactiveBtn.classList.toggle('active', next);
+    syncProactiveChatButton();
   });
+  syncProactiveChatButton();
 
   voiceToggles.appendChild(muteBtn);
   voiceToggles.appendChild(proactiveBtn);
@@ -1356,10 +1360,12 @@ export function createMinimalUI(container, state, onChange) {
   return {
     bindPetBrain(brainInstance) {
       petBrain = brainInstance;
+      syncProactiveChatButton();
       renderChatAndStatus(petBrain.state);
       checkFirstRunSetup();
     },
     updatePetState(brainState) {
+      syncProactiveChatButton();
       renderChatAndStatus(brainState);
     },
     setSubtitle(text, visible) {

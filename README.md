@@ -29,7 +29,7 @@ Mochi-Puff can be run and packaged directly as a native standalone desktop appli
   ```bash
   npm run build:exe
   ```
-  Or on Windows, double-click `build_desktop.bat`.
+  This creates a portable executable and an installable Windows installer in `dist-desktop/`. The installed app opens in its own window and starts its local server invisibly.
 - Build macOS DMG & App Bundle:
   ```bash
   npm run build:dmg
@@ -75,6 +75,7 @@ chmod +x run_desktop.sh
   - Text-to-Speech (TTS): gemini-3.8-flash-lite-tts (Puck, Kore, Zephyr, Fenrir, Charon)
 - Bilingual: Full native support for English and Korean.
 - Push-to-Talk and Interruption: Tap or hold the mic button to talk; tap "Stop" anytime to interrupt speech.
+- Spontaneous Chat: Off by default; enable it in Settings -> Pet & Voice if you want Mochi-Puff to initiate occasional conversations.
 
 ### 6. User Gemini API Key & Custom OpenAI-Compatible Endpoints
 - Direct Gemini API Key Entry: Type your Google Gemini API key directly into Settings -> AI Endpoints to power default models. Stored locally in your browser.
