@@ -90,11 +90,15 @@ export function createMinimalUI(container, state, onChange) {
   container.replaceChildren();
   container.className = 'pet-ui-layer ultra-minimal';
 
+  /** @type {any} */
   let petBrain = null;
   let isSettingsOpen = false;
 
+  /** @type {Record<string, any>} */
   const sliderRefs = {};
+  /** @type {Record<string, HTMLInputElement>} */
   const colorRefs = {};
+  /** @type {Record<string, HTMLButtonElement>} */
   const sceneButtons = {};
 
   // =========================================================================
@@ -169,25 +173,6 @@ export function createMinimalUI(container, state, onChange) {
   setupPersRow.appendChild(setupPersSelect);
   setupForm.appendChild(setupPersRow);
 
-  // Google Gemini API Key
-  const setupKeyRow = document.createElement('div');
-  setupKeyRow.className = 'form-field-row';
-  const setupKeyLabel = document.createElement('label');
-  setupKeyLabel.className = 'control-label';
-  setupKeyLabel.textContent = 'Google Gemini API Key';
-  const setupKeyHint = document.createElement('p');
-  setupKeyHint.className = 'endpoint-info-box';
-  setupKeyHint.textContent = 'Enter your Gemini API key to activate voice chat, transcription, and speech responses. Your key is stored locally in your browser. You can also skip and configure in Settings later.';
-  const setupKeyInput = document.createElement('input');
-  setupKeyInput.type = 'password';
-  setupKeyInput.className = 'settings-text-input';
-  setupKeyInput.placeholder = 'AIzaSy... (paste your Gemini API key)';
-  setupKeyInput.autocomplete = 'off';
-  setupKeyRow.appendChild(setupKeyLabel);
-  setupKeyRow.appendChild(setupKeyHint);
-  setupKeyRow.appendChild(setupKeyInput);
-  setupForm.appendChild(setupKeyRow);
-
   // Actions
   const setupActionsRow = document.createElement('div');
   setupActionsRow.className = 'welcome-setup-actions';
@@ -210,11 +195,6 @@ export function createMinimalUI(container, state, onChange) {
         language: setupLangSelect.value,
         personality: setupPersSelect.value,
       });
-      if (setupKeyInput.value.trim()) {
-        petBrain.updateProviderConfig({
-          geminiApiKey: setupKeyInput.value.trim(),
-        });
-      }
     }
     localStorage.setItem('mochi_first_run_completed', 'true');
     setupBackdrop.classList.add('hidden');
@@ -247,7 +227,6 @@ export function createMinimalUI(container, state, onChange) {
       setupNameInput.value = petBrain.state.profile.name || 'Mochi-Puff';
       setupLangSelect.value = petBrain.state.profile.language || 'auto';
       setupPersSelect.value = petBrain.state.profile.personality || 'playful';
-      setupKeyInput.value = petBrain.state.profile.providerConfig.geminiApiKey || '';
     }
     setupBackdrop.classList.remove('hidden');
   }
@@ -431,7 +410,9 @@ export function createMinimalUI(container, state, onChange) {
     { id: 'scene', label: 'Scene' },
   ];
 
+  /** @type {Record<string, HTMLElement>} */
   const tabPanes = {};
+  /** @type {Record<string, HTMLButtonElement>} */
   const tabBtns = {};
   const settingsBody = document.createElement('div');
   settingsBody.className = 'pet-modal-body';
@@ -473,6 +454,11 @@ export function createMinimalUI(container, state, onChange) {
     if (isSettingsOpen && petBrain) {
       renderChatHistoryInTab();
       renderMemoriesTab();
+      syncGeminiKeyUI();
+      syncChatAi();
+      syncSttAi();
+      syncTtsAi();
+      updateApiKeySavedBadge();
     }
   }
 
@@ -623,19 +609,31 @@ export function createMinimalUI(container, state, onChange) {
   const geminiMasterBlock = document.createElement('div');
   geminiMasterBlock.className = 'ai-service-block gemini-primary-block';
 
+  const geminiHeaderRow = document.createElement('div');
+  geminiHeaderRow.className = 'control-label-row';
+  geminiHeaderRow.style.marginBottom = '6px';
+
   const geminiTitle = document.createElement('div');
   geminiTitle.className = 'ui-section-title';
+  geminiTitle.style.marginBottom = '0';
   geminiTitle.textContent = 'Google Gemini API Key (Default Models)';
-  geminiMasterBlock.appendChild(geminiTitle);
+
+  const apiKeyStatusBadge = document.createElement('span');
+  apiKeyStatusBadge.className = 'control-val';
+  apiKeyStatusBadge.style.fontSize = '0.75rem';
+  apiKeyStatusBadge.textContent = 'Not Configured';
+
+  geminiHeaderRow.appendChild(geminiTitle);
+  geminiHeaderRow.appendChild(apiKeyStatusBadge);
+  geminiMasterBlock.appendChild(geminiHeaderRow);
 
   const geminiInfo = document.createElement('p');
   geminiInfo.className = 'endpoint-info-box';
   geminiInfo.innerHTML = `
-    Type or paste your Google Gemini API key below to power Mochi-Puff's default models:
+    Enter your Google Gemini API key below and click <strong>Save API Keys</strong> (stored in browser & server <code>.env</code>). Without an API key, AI chat and voice will not run:
     <br/>• <strong>Chat LLM:</strong> gemini-3.1-flash-lite / gemini-2.5-flash-lite
     <br/>• <strong>Speech-to-Text:</strong> gemini-3.5-transcribe
     <br/>• <strong>Voice Synthesis:</strong> gemini-3.8-flash-lite-tts
-    <br/><span style="color: var(--text-muted); font-size: 11px;">Saved securely in your browser's local storage.</span>
   `;
   geminiMasterBlock.appendChild(geminiInfo);
 
@@ -651,7 +649,7 @@ export function createMinimalUI(container, state, onChange) {
   const geminiKeyInput = document.createElement('input');
   geminiKeyInput.type = 'password';
   geminiKeyInput.className = 'settings-text-input';
-  geminiKeyInput.placeholder = 'AIzaSy... (paste your Gemini API key)';
+  geminiKeyInput.placeholder = 'AIzaSy... (or configure GEMINI_API_KEY in .env)';
   geminiKeyInput.autocomplete = 'off';
 
   const toggleKeyViewBtn = document.createElement('button');
@@ -664,18 +662,60 @@ export function createMinimalUI(container, state, onChange) {
     toggleKeyViewBtn.textContent = isPass ? 'Hide' : 'Show';
   });
 
+  const saveTopKeyBtn = document.createElement('button');
+  saveTopKeyBtn.type = 'button';
+  saveTopKeyBtn.className = 'action-btn active';
+  saveTopKeyBtn.style.flex = '0 0 auto';
+  saveTopKeyBtn.style.padding = '6px 14px';
+  saveTopKeyBtn.textContent = 'Save API Keys';
+
   geminiKeyInputWrap.appendChild(geminiKeyInput);
   geminiKeyInputWrap.appendChild(toggleKeyViewBtn);
+  geminiKeyInputWrap.appendChild(saveTopKeyBtn);
 
   geminiKeyRow.appendChild(geminiKeyLabel);
   geminiKeyRow.appendChild(geminiKeyInputWrap);
   geminiMasterBlock.appendChild(geminiKeyRow);
 
+  /** @type {Array<{ serviceKey: string, getSectionPayload: () => any }>} */
+  const serviceSyncFormatters = [];
+
+  function updateApiKeySavedBadge(flashSaved = false) {
+    if (!petBrain) return;
+    const pc = petBrain.state.profile.providerConfig || {};
+    const hasKey = Boolean(
+      (pc.geminiApiKey && pc.geminiApiKey.trim()) ||
+      (pc.chat?.apiKey && pc.chat.apiKey.trim()) ||
+      (pc.stt?.apiKey && pc.stt.apiKey.trim()) ||
+      (pc.tts?.apiKey && pc.tts.apiKey.trim())
+    );
+    if (flashSaved) {
+      apiKeyStatusBadge.textContent = '✓ Saved & Stored';
+      apiKeyStatusBadge.style.color = '#4ade80';
+      return;
+    }
+    if (hasKey) {
+      apiKeyStatusBadge.textContent = '✓ Key Stored';
+      apiKeyStatusBadge.style.color = '#4ade80';
+    } else {
+      apiKeyStatusBadge.textContent = 'No Key Set';
+      apiKeyStatusBadge.style.color = '#f87171';
+    }
+  }
+
   geminiKeyInput.addEventListener('input', () => {
     if (!petBrain) return;
-    petBrain.updateProviderConfig({
-      geminiApiKey: geminiKeyInput.value.trim(),
-    });
+    petBrain.updateProviderConfig(
+      { geminiApiKey: geminiKeyInput.value.trim() },
+      { silent: true }
+    );
+    updateApiKeySavedBadge(true);
+  });
+
+  geminiKeyInput.addEventListener('change', () => {
+    if (!petBrain) return;
+    petBrain.saveProviderConfigNow({ geminiApiKey: geminiKeyInput.value.trim() });
+    updateApiKeySavedBadge(true);
   });
 
   aiPane.appendChild(geminiMasterBlock);
@@ -683,12 +723,13 @@ export function createMinimalUI(container, state, onChange) {
   function syncGeminiKeyUI() {
     if (!petBrain) return;
     const key = petBrain.state.profile.providerConfig.geminiApiKey || '';
-    if (geminiKeyInput.value !== key) {
+    if (document.activeElement !== geminiKeyInput && geminiKeyInput.value !== key) {
       geminiKeyInput.value = key;
     }
+    updateApiKeySavedBadge(false);
   }
 
-  function buildAiServiceSection(title, serviceKey, defaultModel, defaultEndpoint) {
+  function buildAiServiceSection(title, serviceKey, defaultModel, defaultEndpoint, defaultCustomModel) {
     const sec = document.createElement('div');
     sec.className = 'ai-service-block';
 
@@ -720,6 +761,7 @@ export function createMinimalUI(container, state, onChange) {
     urlInput.type = 'text';
     urlInput.className = 'settings-text-input';
     urlInput.placeholder = defaultEndpoint;
+    urlInput.autocomplete = 'off';
     urlRow.appendChild(urlLabel);
     urlRow.appendChild(urlInput);
     customFields.appendChild(urlRow);
@@ -732,7 +774,8 @@ export function createMinimalUI(container, state, onChange) {
     const modelInput = document.createElement('input');
     modelInput.type = 'text';
     modelInput.className = 'settings-text-input';
-    modelInput.placeholder = 'Exact model ID supported by this provider';
+    modelInput.placeholder = `e.g. ${defaultCustomModel}`;
+    modelInput.autocomplete = 'off';
     modelRow.appendChild(modelLabel);
     modelRow.appendChild(modelInput);
     customFields.appendChild(modelRow);
@@ -741,13 +784,32 @@ export function createMinimalUI(container, state, onChange) {
     keyRow.className = 'form-field-row';
     const keyLabel = document.createElement('label');
     keyLabel.className = 'control-label';
-    keyLabel.textContent = 'API Key / Token (Optional for local Ollama/LM Studio)';
+    keyLabel.textContent = 'API Key / Token (or set CUSTOM_API_KEY in .env)';
+
+    const keyInputWrap = document.createElement('div');
+    keyInputWrap.className = 'inline-input-row';
+
     const keyInput = document.createElement('input');
     keyInput.type = 'password';
     keyInput.className = 'settings-text-input';
-    keyInput.placeholder = 'sk-... (leave empty if using server .env)';
+    keyInput.placeholder = 'sk-...';
+    keyInput.autocomplete = 'off';
+
+    const toggleCustomKeyBtn = document.createElement('button');
+    toggleCustomKeyBtn.type = 'button';
+    toggleCustomKeyBtn.className = 'chat-mini-btn';
+    toggleCustomKeyBtn.textContent = 'Show';
+    toggleCustomKeyBtn.addEventListener('click', () => {
+      const isPass = keyInput.type === 'password';
+      keyInput.type = isPass ? 'text' : 'password';
+      toggleCustomKeyBtn.textContent = isPass ? 'Hide' : 'Show';
+    });
+
+    keyInputWrap.appendChild(keyInput);
+    keyInputWrap.appendChild(toggleCustomKeyBtn);
+
     keyRow.appendChild(keyLabel);
-    keyRow.appendChild(keyInput);
+    keyRow.appendChild(keyInputWrap);
     customFields.appendChild(keyRow);
 
     sec.appendChild(customFields);
@@ -755,33 +817,54 @@ export function createMinimalUI(container, state, onChange) {
     function syncState() {
       if (!petBrain) return;
       const conf = petBrain.state.profile.providerConfig[serviceKey] || {};
-      provSelect.value = conf.provider || 'gemini';
+      if (document.activeElement !== provSelect) {
+        provSelect.value = conf.provider || 'gemini';
+      }
       customFields.classList.toggle('hidden', provSelect.value !== 'openai-compatible');
-      urlInput.value = conf.baseUrl || '';
-      modelInput.value = conf.model || '';
-      keyInput.value = conf.apiKey || '';
+      if (document.activeElement !== urlInput && urlInput.value !== (conf.baseUrl || '')) {
+        urlInput.value = conf.baseUrl || '';
+      }
+      if (document.activeElement !== modelInput && modelInput.value !== (conf.model || '')) {
+        modelInput.value = conf.model || '';
+      }
+      if (document.activeElement !== keyInput && keyInput.value !== (conf.apiKey || '')) {
+        keyInput.value = conf.apiKey || '';
+      }
     }
 
-    function saveState() {
+    function getSectionPayload() {
+      return {
+        provider: provSelect.value,
+        baseUrl: urlInput.value.trim(),
+        model: modelInput.value.trim() || (provSelect.value === 'openai-compatible' ? defaultCustomModel : defaultModel.split(' ')[0]),
+        apiKey: keyInput.value.trim(),
+      };
+    }
+
+    function saveState(silent = true) {
       if (!petBrain) return;
-      petBrain.updateProviderConfig({
-        [serviceKey]: {
-          provider: provSelect.value,
-          baseUrl: urlInput.value.trim(),
-          model: modelInput.value.trim(),
-          apiKey: keyInput.value.trim(),
-        },
-      });
+      petBrain.updateProviderConfig(
+        { [serviceKey]: getSectionPayload() },
+        { silent }
+      );
+      updateApiKeySavedBadge(true);
     }
 
     provSelect.addEventListener('change', () => {
       customFields.classList.toggle('hidden', provSelect.value !== 'openai-compatible');
-      saveState();
+      if (provSelect.value === 'openai-compatible' && (!modelInput.value || modelInput.value.startsWith('gemini-'))) {
+        modelInput.value = defaultCustomModel;
+      }
+      saveState(false);
     });
-    urlInput.addEventListener('input', saveState);
-    modelInput.addEventListener('input', saveState);
-    keyInput.addEventListener('input', saveState);
+    urlInput.addEventListener('input', () => saveState(true));
+    modelInput.addEventListener('input', () => saveState(true));
+    keyInput.addEventListener('input', () => saveState(true));
+    urlInput.addEventListener('change', () => saveState(false));
+    modelInput.addEventListener('change', () => saveState(false));
+    keyInput.addEventListener('change', () => saveState(false));
 
+    serviceSyncFormatters.push({ serviceKey, getSectionPayload });
     aiPane.appendChild(sec);
     return syncState;
   }
@@ -790,20 +873,57 @@ export function createMinimalUI(container, state, onChange) {
     '1. Text LLM API (Chat & Personality)',
     'chat',
     'gemini-3.1-flash-lite / gemini-2.5-flash-lite',
-    'https://api.openai.com/v1 or http://localhost:11434/v1'
+    'https://api.openai.com/v1 or http://localhost:11434/v1',
+    'gpt-4o-mini'
   );
   const syncSttAi = buildAiServiceSection(
     '2. STT API (Audio Transcription)',
     'stt',
     'gemini-3.5-transcribe',
-    'https://api.openai.com/v1 or http://localhost:11434/v1'
+    'https://api.openai.com/v1 or http://localhost:11434/v1',
+    'whisper-1'
   );
   const syncTtsAi = buildAiServiceSection(
     '3. TTS API (Voice Speech Output)',
     'tts',
     'gemini-3.8-flash-lite-tts',
-    'https://api.openai.com/v1 or http://localhost:8000/v1'
+    'https://api.openai.com/v1 or http://localhost:8000/v1',
+    'tts-1'
   );
+
+  const saveAllKeysFooter = document.createElement('div');
+  saveAllKeysFooter.style.marginTop = '12px';
+  const saveAllKeysBtn = document.createElement('button');
+  saveAllKeysBtn.type = 'button';
+  saveAllKeysBtn.className = 'welcome-primary-btn';
+  saveAllKeysBtn.style.width = '100%';
+  saveAllKeysBtn.textContent = 'Save All API Keys & Endpoint Settings';
+  saveAllKeysFooter.appendChild(saveAllKeysBtn);
+  aiPane.appendChild(saveAllKeysFooter);
+
+  async function handleExplicitSaveAllKeys() {
+    if (!petBrain) return;
+    /** @type {Record<string, any>} */
+    const payload = {
+      geminiApiKey: geminiKeyInput.value.trim(),
+    };
+    serviceSyncFormatters.forEach(({ serviceKey, getSectionPayload }) => {
+      payload[serviceKey] = getSectionPayload();
+    });
+    saveTopKeyBtn.textContent = 'Saving...';
+    saveAllKeysBtn.textContent = 'Saving...';
+    await petBrain.saveProviderConfigNow(payload);
+    updateApiKeySavedBadge(true);
+    saveTopKeyBtn.textContent = 'Saved ✓';
+    saveAllKeysBtn.textContent = 'Saved & Stored to Browser + Server ✓';
+    setTimeout(() => {
+      saveTopKeyBtn.textContent = 'Save API Keys';
+      saveAllKeysBtn.textContent = 'Save All API Keys & Endpoint Settings';
+    }, 2200);
+  }
+
+  saveTopKeyBtn.addEventListener('click', handleExplicitSaveAllKeys);
+  saveAllKeysBtn.addEventListener('click', handleExplicitSaveAllKeys);
 
   // -------------------------------------------------------------------------
   // TAB 2: PET & VOICE
@@ -909,19 +1029,15 @@ export function createMinimalUI(container, state, onChange) {
 
   const proactiveBtn = document.createElement('button');
   proactiveBtn.type = 'button';
-  proactiveBtn.className = 'action-btn';
-  function syncProactiveChatButton() {
-    const enabled = Boolean(petBrain?.state.profile.proactiveChatEnabled);
-    proactiveBtn.textContent = `Spontaneous Chat: ${enabled ? 'ON' : 'OFF'}`;
-    proactiveBtn.classList.toggle('active', enabled);
-  }
+  proactiveBtn.className = 'action-btn active';
+  proactiveBtn.textContent = 'Spontaneous Chat: ON';
   proactiveBtn.addEventListener('click', () => {
     if (!petBrain) return;
     const next = !petBrain.state.profile.proactiveChatEnabled;
     petBrain.updateProfile({ proactiveChatEnabled: next });
-    syncProactiveChatButton();
+    proactiveBtn.textContent = next ? 'Spontaneous Chat: ON' : 'Spontaneous Chat: OFF';
+    proactiveBtn.classList.toggle('active', next);
   });
-  syncProactiveChatButton();
 
   voiceToggles.appendChild(muteBtn);
   voiceToggles.appendChild(proactiveBtn);
@@ -998,12 +1114,6 @@ export function createMinimalUI(container, state, onChange) {
     if (!petBrain) return;
     memoriesPane.replaceChildren();
     const s = petBrain.state;
-    const rel = petBrain.getRelationshipInfo();
-
-    const statsTitle = document.createElement('div');
-    statsTitle.className = 'ui-section-title';
-    statsTitle.textContent = `Relationship: Level ${rel.level} (${rel.title}) · ${rel.xp} XP`;
-    memoriesPane.appendChild(statsTitle);
 
     const metersGrid = document.createElement('div');
     metersGrid.className = 'emotion-meters-grid';
@@ -1104,6 +1214,7 @@ export function createMinimalUI(container, state, onChange) {
 
   const accGrid = document.createElement('div');
   accGrid.className = 'preset-grid';
+  /** @type {Record<string, HTMLButtonElement>} */
   const accButtons = {};
   ACCESSORY_OPTIONS.forEach((acc) => {
     const btn = document.createElement('button');
@@ -1132,6 +1243,7 @@ export function createMinimalUI(container, state, onChange) {
 
   const eyeRow = document.createElement('div');
   eyeRow.className = 'eye-swatch-row';
+  /** @type {Record<string, HTMLButtonElement>} */
   const eyeButtons = {};
   EYE_COLOR_PRESETS.forEach((ep) => {
     const sw = document.createElement('button');
@@ -1360,12 +1472,12 @@ export function createMinimalUI(container, state, onChange) {
   return {
     bindPetBrain(brainInstance) {
       petBrain = brainInstance;
-      syncProactiveChatButton();
-      renderChatAndStatus(petBrain.state);
+      if (petBrain) {
+        renderChatAndStatus(petBrain.state);
+      }
       checkFirstRunSetup();
     },
-    updatePetState(brainState) {
-      syncProactiveChatButton();
+    updatePetState(brainState, _relInfo = null) {
       renderChatAndStatus(brainState);
     },
     setSubtitle(text, visible) {
@@ -1407,12 +1519,12 @@ export function createMinimalUI(container, state, onChange) {
       state.environment = safeEnv;
       updateEnvSelectionUI(safeEnv);
     },
-    setARStatus() {},
-    setARPlaneStatus() {},
-    setARLightStatus() {},
-    setLightEstActive() {},
-    setSurfaceTrackedStatus() {},
-    setTapPlaceActive() {},
-    setMirrorLabel() {},
+    setARStatus(..._args) {},
+    setARPlaneStatus(..._args) {},
+    setARLightStatus(..._args) {},
+    setLightEstActive(..._args) {},
+    setSurfaceTrackedStatus(..._args) {},
+    setTapPlaceActive(..._args) {},
+    setMirrorLabel(..._args) {},
   };
 }

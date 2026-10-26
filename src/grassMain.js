@@ -39,7 +39,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.06;
-container.appendChild(renderer.domElement);
+if (container) container.appendChild(renderer.domElement);
 
 // 2. Scene & Camera
 const scene = new THREE.Scene();
@@ -603,7 +603,7 @@ window.addEventListener('pointermove', (e) => {
     sharedUniforms.uBrushUV.value.copy(currentBrushUV);
     sharedUniforms.uBrushActive.value = 1.0;
     isHoveringDirt = true;
-    container.style.cursor = 'crosshair';
+    if (container) container.style.cursor = 'crosshair';
 
     if (isPaintingStroke) {
       applyInterpolatedStroke(prevBrushUV, currentBrushUV);
@@ -611,7 +611,7 @@ window.addEventListener('pointermove', (e) => {
   } else {
     isHoveringDirt = false;
     sharedUniforms.uBrushActive.value = 0.0;
-    container.style.cursor = 'grab';
+    if (container) container.style.cursor = 'grab';
   }
 });
 

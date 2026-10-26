@@ -403,25 +403,40 @@ export function createBlobCreature() {
   faceGroup.name = 'FacialFeatures';
   root.add(faceGroup);
 
-  const eyeMaterial = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color('#120d1a'),
-    roughness: 0.04,
-    metalness: 0.05,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.03,
-    reflectivity: 1.0
+  // Eyeball base socket material (rich glossy dark obsidian)
+  const eyeBaseMaterial = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#0e0818'),
+    roughness: 0.12,
+    metalness: 0.08
   });
 
-  const irisMaterial = new THREE.MeshBasicMaterial({
-    color: new THREE.Color('#3d285c')
+  // Vibrant jewel iris material (dynamically updated by setEyeColor)
+  const irisMaterial = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#7a42b8'),
+    roughness: 0.28,
+    metalness: 0.02
   });
 
-  const highlightMat = new THREE.MeshBasicMaterial({
+  // Radiant lower-crescent glow material (gives anime jewel depth)
+  const crescentMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#cf9eff')
+  });
+
+  // Velvety dark central pupil
+  const pupilMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#05020a')
+  });
+
+  // Crisp pure white highlights
+  const catchlightMaterial = new THREE.MeshBasicMaterial({
     color: new THREE.Color('#ffffff')
   });
 
-  const warmHighlightMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color('#ffe4f2')
+  // Soft secondary highlight
+  const catchlightSubMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#ffffff'),
+    transparent: true,
+    opacity: 0.88
   });
 
   const eyes = [];
@@ -430,43 +445,71 @@ export function createBlobCreature() {
   for (const side of eyeSides) {
     const eyePivot = new THREE.Group();
     eyePivot.position.set(side * 0.31, 0.16, 0.94);
-    eyePivot.rotation.y = side * 0.22;
-    eyePivot.rotation.x = -0.06;
+    eyePivot.rotation.y = side * 0.20;
+    eyePivot.rotation.x = -0.05;
 
-    // Dark glossy cornea
-    const eyeballGeo = new THREE.SphereGeometry(0.17, 32, 24);
-    eyeballGeo.scale(0.96, 1.08, 0.68);
-    const eyeball = new THREE.Mesh(eyeballGeo, eyeMaterial);
+    // 1. Glossy dark eyeball base / socket
+    const eyeballGeo = new THREE.SphereGeometry(0.168, 32, 24);
+    eyeballGeo.scale(0.96, 1.10, 0.62);
+    const eyeball = new THREE.Mesh(eyeballGeo, eyeBaseMaterial);
     eyePivot.add(eyeball);
 
-    // Radiant customizable eye iris crescent
-    const irisGeo = new THREE.SphereGeometry(0.145, 24, 16);
-    irisGeo.scale(0.95, 0.98, 0.44);
+    // 2. Iris & Pupil tracking container - moves smoothly in unison as creature looks around
+    const irisGroup = new THREE.Group();
+    irisGroup.position.set(0, 0, 0.035);
+
+    // 2a. Colored iris oval
+    const irisGeo = new THREE.SphereGeometry(0.145, 32, 20);
+    irisGeo.scale(0.88, 1.02, 0.38);
     const iris = new THREE.Mesh(irisGeo, irisMaterial);
-    iris.position.set(0, -0.015, 0.098);
-    eyePivot.add(iris);
+    iris.position.set(0, -0.010, 0.046);
+    irisGroup.add(iris);
 
-    // Primary large anime catchlight (top-inner)
-    const catchlightMainGeo = new THREE.SphereGeometry(0.045, 16, 12);
-    catchlightMainGeo.scale(1.0, 1.18, 0.32);
-    const catchlightMain = new THREE.Mesh(catchlightMainGeo, highlightMat);
-    catchlightMain.position.set(-side * 0.042, 0.052, 0.112);
-    eyePivot.add(catchlightMain);
+    // 2b. Luminous lower crescent arc (kawaii jewel sparkle)
+    const crescentGeo = new THREE.SphereGeometry(0.118, 24, 16);
+    crescentGeo.scale(0.82, 0.50, 0.20);
+    const crescent = new THREE.Mesh(crescentGeo, crescentMaterial);
+    crescent.position.set(0, -0.052, 0.058);
+    irisGroup.add(crescent);
 
-    // Secondary lower rim catchlight
-    const catchlightSubGeo = new THREE.SphereGeometry(0.023, 14, 10);
-    catchlightSubGeo.scale(1.0, 1.0, 0.32);
-    const catchlightSub = new THREE.Mesh(catchlightSubGeo, warmHighlightMat);
-    catchlightSub.position.set(side * 0.048, -0.052, 0.11);
-    eyePivot.add(catchlightSub);
+    // 2c. Deep dark center pupil
+    const pupilGeo = new THREE.SphereGeometry(0.068, 24, 16);
+    pupilGeo.scale(0.82, 1.02, 0.24);
+    const pupil = new THREE.Mesh(pupilGeo, pupilMaterial);
+    pupil.position.set(0, 0.004, 0.066);
+    irisGroup.add(pupil);
 
+    // 2d. Primary large anime catchlight (top-inner quadrant)
+    const catchMainGeo = new THREE.SphereGeometry(0.042, 20, 16);
+    catchMainGeo.scale(1.0, 1.25, 0.20);
+    const catchMain = new THREE.Mesh(catchMainGeo, catchlightMaterial);
+    catchMain.position.set(-side * 0.038, 0.046, 0.076);
+    catchMain.rotation.z = side * 0.20;
+    irisGroup.add(catchMain);
+
+    // 2e. Secondary lower-outer catchlight (dewdrop shine)
+    const catchSubGeo = new THREE.SphereGeometry(0.020, 16, 12);
+    catchSubGeo.scale(1.0, 1.0, 0.20);
+    const catchSub = new THREE.Mesh(catchSubGeo, catchlightSubMaterial);
+    catchSub.position.set(side * 0.042, -0.042, 0.074);
+    irisGroup.add(catchSub);
+
+    // 2f. Third tiny pinpoint sparkle (top-outer)
+    const catchTinyGeo = new THREE.SphereGeometry(0.012, 12, 10);
+    catchTinyGeo.scale(1.0, 1.0, 0.20);
+    const catchTiny = new THREE.Mesh(catchTinyGeo, catchlightMaterial);
+    catchTiny.position.set(side * 0.040, 0.032, 0.075);
+    irisGroup.add(catchTiny);
+
+    eyePivot.add(irisGroup);
     faceGroup.add(eyePivot);
+
     eyes.push({
       pivot: eyePivot,
       basePos: eyePivot.position.clone(),
-      iris,
-      catchlightMain,
-      catchlightSub,
+      irisGroup,
+      pupil,
+      catchTiny,
       side
     });
   }
@@ -593,7 +636,7 @@ export function createBlobCreature() {
   let targetFacingPitch = 0.0;
   let faceViewerHoldTimer = 0.0;
 
-  function placeAt(targetWorldPos, normal, animate = true, cameraPos = null) {
+  function placeAt(targetWorldPos, normal, animate = true, /** @type {any} */ cameraPos = null) {
     if (!targetWorldPos) return;
     isPlaced = true;
     const s = animState.baseScale;
@@ -762,7 +805,17 @@ export function createBlobCreature() {
 
   function setEyeColor(hexColor) {
     try {
-      irisMaterial.color.set(hexColor);
+      const c = new THREE.Color(hexColor);
+      irisMaterial.color.copy(c);
+      // Derive a bright luminous pastel tint for the crescent sparkle
+      const hsl = {};
+      c.getHSL(hsl);
+      const crescentColor = new THREE.Color().setHSL(
+        hsl.h,
+        Math.max(0.35, hsl.s * 0.75),
+        Math.min(0.92, hsl.l + 0.32)
+      );
+      crescentMaterial.color.copy(crescentColor);
     } catch {
       // ignore invalid hex
     }
@@ -792,7 +845,7 @@ export function createBlobCreature() {
     animState.userDragOffset.y = Math.max(-0.42, Math.min(0.42, animState.userDragOffset.y + dz));
   }
 
-  function update(dt, pointerNDC, cameraPos = null, isARMode = false) {
+  function update(dt, pointerNDC, /** @type {any} */ cameraPos = null, isARMode = false) {
     const safeDt = Math.min(Math.max(dt, 0.001), 0.05);
     animState.time += safeDt;
 
@@ -1080,13 +1133,37 @@ export function createBlobCreature() {
       blinkScaleY = Math.min(blinkScaleY, 0.18);
     }
 
+    // Dynamic pupil dilation & sparkle for expressive kawaii anime eyes
+    const targetPupilScale =
+      animState.emotion === 'loving' || animState.emotion === 'excited' || animState.pettingIntensity > 0.25
+        ? 1.22
+        : animState.emotion === 'surprised' || animState.emotion === 'curious'
+        ? 1.14
+        : animState.emotion === 'sleepy'
+        ? 0.88
+        : 1.0;
+    animState.pupilScale = animState.pupilScale || 1.0;
+    animState.pupilScale += (targetPupilScale - animState.pupilScale) * Math.min(1.0, safeDt * 8.0);
+    const currentPupilScale = animState.pupilScale;
+
     for (const eye of eyes) {
       eye.pivot.scale.y += (blinkScaleY - eye.pivot.scale.y) * Math.min(1.0, safeDt * 18.0);
       eye.pivot.scale.x += (eyeScaleX - eye.pivot.scale.x) * Math.min(1.0, safeDt * 12.0);
       eye.pivot.rotation.z =
         eye.side * (animState.emotion === 'sad' ? -0.15 : animState.emotion === 'happy' ? 0.05 : 0.0);
-      eye.catchlightMain.position.x = -eye.side * 0.042 + animState.currentLook.x * 0.028;
-      eye.catchlightMain.position.y = 0.052 + animState.currentLook.y * 0.025;
+
+      // Eye tracking moves entire iris & highlight cluster together smoothly without separation
+      eye.irisGroup.position.x = animState.currentLook.x * 0.016;
+      eye.irisGroup.position.y = animState.currentLook.y * 0.014;
+
+      if (eye.pupil) {
+        eye.pupil.scale.set(0.82 * currentPupilScale, 1.02 * currentPupilScale, 0.24);
+      }
+
+      if (eye.catchTiny) {
+        const twinkle = 0.85 + 0.25 * Math.sin(animState.time * 6.0 + eye.side);
+        eye.catchTiny.scale.set(twinkle, twinkle, 0.20);
+      }
     }
 
     // Gently float the halo or animate sprout if active

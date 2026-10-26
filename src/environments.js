@@ -1406,12 +1406,14 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
   shadowCanvas.width = 256;
   shadowCanvas.height = 256;
   const sCtx = shadowCanvas.getContext('2d');
-  const grad = sCtx.createRadialGradient(128, 128, 10, 128, 128, 120);
-  grad.addColorStop(0.0, 'rgba(0, 0, 0, 0.78)');
-  grad.addColorStop(0.45, 'rgba(2, 2, 6, 0.38)');
-  grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
-  sCtx.fillStyle = grad;
-  sCtx.fillRect(0, 0, 256, 256);
+  if (sCtx) {
+    const grad = sCtx.createRadialGradient(128, 128, 10, 128, 128, 120);
+    grad.addColorStop(0.0, 'rgba(0, 0, 0, 0.78)');
+    grad.addColorStop(0.45, 'rgba(2, 2, 6, 0.38)');
+    grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+    sCtx.fillStyle = grad;
+    sCtx.fillRect(0, 0, 256, 256);
+  }
 
   const contactShadowTex = new THREE.CanvasTexture(shadowCanvas);
   const studioShadowMesh = new THREE.Mesh(
@@ -1431,13 +1433,15 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
   moteCanvas.width = 64;
   moteCanvas.height = 64;
   const moteCtx = moteCanvas.getContext('2d');
-  const moteGrad = moteCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  moteGrad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
-  moteGrad.addColorStop(0.35, 'rgba(255, 255, 255, 0.85)');
-  moteGrad.addColorStop(0.7, 'rgba(255, 255, 255, 0.25)');
-  moteGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
-  moteCtx.fillStyle = moteGrad;
-  moteCtx.fillRect(0, 0, 64, 64);
+  if (moteCtx) {
+    const moteGrad = moteCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    moteGrad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+    moteGrad.addColorStop(0.35, 'rgba(255, 255, 255, 0.85)');
+    moteGrad.addColorStop(0.7, 'rgba(255, 255, 255, 0.25)');
+    moteGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+    moteCtx.fillStyle = moteGrad;
+    moteCtx.fillRect(0, 0, 64, 64);
+  }
   const moteCircleTex = new THREE.CanvasTexture(moteCanvas);
 
   const moteCount = 90;
@@ -2829,13 +2833,15 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
   glowCanvas.width = 128;
   glowCanvas.height = 128;
   const gCtx = glowCanvas.getContext('2d');
-  const gGrad = gCtx.createRadialGradient(64, 64, 2, 64, 64, 62);
-  gGrad.addColorStop(0.0, 'rgba(255, 248, 215, 0.96)');
-  gGrad.addColorStop(0.30, 'rgba(251, 146, 60, 0.52)');
-  gGrad.addColorStop(0.68, 'rgba(234, 88, 12, 0.16)');
-  gGrad.addColorStop(1.0, 'rgba(234, 88, 12, 0.0)');
-  gCtx.fillStyle = gGrad;
-  gCtx.fillRect(0, 0, 128, 128);
+  if (gCtx) {
+    const gGrad = gCtx.createRadialGradient(64, 64, 2, 64, 64, 62);
+    gGrad.addColorStop(0.0, 'rgba(255, 248, 215, 0.96)');
+    gGrad.addColorStop(0.30, 'rgba(251, 146, 60, 0.52)');
+    gGrad.addColorStop(0.68, 'rgba(234, 88, 12, 0.16)');
+    gGrad.addColorStop(1.0, 'rgba(234, 88, 12, 0.0)');
+    gCtx.fillStyle = gGrad;
+    gCtx.fillRect(0, 0, 128, 128);
+  }
   const candleGlowTex = new THREE.CanvasTexture(glowCanvas);
   const candleSpriteMat = new THREE.SpriteMaterial({
     map: candleGlowTex,
@@ -3334,11 +3340,14 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
   document.body.insertBefore(arFallbackCanvas, container);
   const arFallbackCtx = arFallbackCanvas.getContext('2d');
 
+  /** @type {any} */
   let activeStream = null;
   let isCameraLive = false;
   let isMirrored = true;
   let facingMode = 'user';
+  /** @type {any} */
   let statusCallback = null;
+  /** @type {any} */
   let planeDetectedCallback = null;
 
   let estimatedPlaneHeight = -0.94;
@@ -3346,11 +3355,13 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
   let estimatedPlaneConfidence = 0.94;
   let detectedFeatureCount = 0;
   let currentAnchorPlaneY = -0.94;
+  let isSurfaceLocked = false;
   let cursorPulse = 0.0;
   let lastAnalysisTime = 0.0;
 
   // Real-Time AR Light Estimation state (active by default in AR scene)
   let lightEstimationEnabled = true;
+  /** @type {any} */
   let lightEstimatedCallback = null;
   let lastLightEstTime = 0.0;
   let estLightAngle = -32;
@@ -3395,7 +3406,7 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
     lastLightEstTime = time;
 
     const source = isCameraLive && arVideo.readyState >= 2 ? arVideo : arFallbackCanvas;
-    if (!source) return;
+    if (!source || !cvCtx) return;
 
     try {
       cvCtx.drawImage(source, 0, 0, 160, 90);
@@ -3587,7 +3598,7 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
     lastAnalysisTime = time;
 
     const source = isCameraLive && arVideo.readyState >= 2 ? arVideo : arFallbackCanvas;
-    if (!source) return;
+    if (!source || !cvCtx) return;
 
     try {
       cvCtx.drawImage(source, 0, 0, 160, 90);
@@ -3831,6 +3842,7 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
         setTimeout(() => reject(new Error('Camera request timed out')), 1200);
       });
 
+      /** @type {any} */
       let stream = null;
       try {
         stream = await Promise.race([
@@ -3855,7 +3867,9 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
       }
 
       if (currentEnvId !== 'ar') {
-        stream.getTracks().forEach((t) => t.stop());
+        if (stream && stream.getTracks) {
+          stream.getTracks().forEach((t) => t.stop());
+        }
         return;
       }
 

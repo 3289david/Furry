@@ -151,9 +151,13 @@ const POSITION_FRAGMENT_SHADER = /* glsl */ `
 `;
 
 export function createGPUFurPhysics(renderer) {
+  /** @type {any} */
   let gpuCompute = null;
+  /** @type {any} */
   let posVariable = null;
+  /** @type {any} */
   let velVariable = null;
+  /** @type {any} */
   let fallbackTexture = null;
   let isGPGPUActive = false;
 
@@ -225,7 +229,7 @@ export function createGPUFurPhysics(renderer) {
     pointerActive,
     boopShockwave
   }) {
-    if (!isGPGPUActive || !gpuCompute) {
+    if (!isGPGPUActive || !gpuCompute || !velVariable || !posVariable) {
       return fallbackTexture;
     }
 

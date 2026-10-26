@@ -64,7 +64,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
 renderer.shadowMap.enabled = !isSoftwareGl;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-container.appendChild(renderer.domElement);
+if (container) container.appendChild(renderer.domElement);
 
 // Handle WebGL context loss & restoration gracefully
 renderer.domElement.addEventListener('webglcontextlost', (e) => {
@@ -430,14 +430,14 @@ window.addEventListener('pointermove', (e) => {
       }
     }
     isPointerOverCreature = true;
-    container.style.cursor = isMovePetMode ? 'move' : 'pointer';
+    if (container) container.style.cursor = isMovePetMode ? 'move' : 'pointer';
     if (simState.environment === 'ar') {
       envManager.updateARCursor(pointerNDC.x, pointerNDC.y, false);
     }
   } else {
     isPointerOverCreature = false;
     pointerVelocity.multiplyScalar(0.5);
-    container.style.cursor = 'grab';
+    if (container) container.style.cursor = 'grab';
     if (simState.environment === 'ar' && tapToPlaceEnabled) {
       envManager.updateARCursor(pointerNDC.x, pointerNDC.y, true);
     }

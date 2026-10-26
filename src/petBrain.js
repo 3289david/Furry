@@ -2,6 +2,7 @@
 // Voice (Gemini STT + TTS + Web Audio Lip-Sync Analyser), and Mini-Games Controller
 
 const STORAGE_KEY = 'mochi_puff_pet_v2';
+const API_CONFIG_STORAGE_KEY = 'mochi_puff_api_config_v1';
 
 export const RELATIONSHIP_LEVELS = [
   { level: 1, minXp: 0, titleEn: 'Shy Sprout', titleKo: '수줍은 새싹' },
@@ -18,7 +19,6 @@ export const EYE_COLOR_PRESETS = [
   { name: 'Honey Amber', color: '#b45309' },
   { name: 'Sakura Rose', color: '#be185d' },
   { name: 'Cocoa Warm', color: '#451a03' },
-  { name: 'White', color: '#ffffff' },
 ];
 
 export const ACCESSORY_OPTIONS = [
@@ -57,8 +57,19 @@ export function loadSavedPetData() {
   }
 }
 
+export function loadSavedApiConfig() {
+  try {
+    const raw = localStorage.getItem(API_CONFIG_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export function createPetBrain({ creature, simState, onStateChange, onSubtitleChange }) {
   const saved = loadSavedPetData();
+  const savedApi = loadSavedApiConfig() || saved?.profile?.providerConfig || {};
   const prefersReducedMotion =
     typeof window !== 'undefined' &&
     window.matchMedia &&
@@ -73,32 +84,29 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
       language: saved?.profile?.language || 'auto',
       eyeColor: saved?.profile?.eyeColor || '#3d285c',
       accessory: saved?.profile?.accessory || 'none',
-      proactiveChatEnabled:
-        saved?.profile?.proactiveChatOptIn === true &&
-        saved?.profile?.proactiveChatEnabled === true,
-      proactiveChatOptIn: saved?.profile?.proactiveChatOptIn === true,
+      proactiveChatEnabled: saved?.profile?.proactiveChatEnabled ?? true,
       proactiveIntervalSec: saved?.profile?.proactiveIntervalSec || 60,
       reducedMotion: saved?.profile?.reducedMotion ?? prefersReducedMotion,
       providerConfig: {
-        geminiApiKey: saved?.profile?.providerConfig?.geminiApiKey || saved?.geminiApiKey || '',
+        geminiApiKey: savedApi?.geminiApiKey || saved?.profile?.providerConfig?.geminiApiKey || saved?.geminiApiKey || '',
         chat: {
-          provider: saved?.profile?.providerConfig?.chat?.provider || saved?.profile?.providerConfig?.provider || 'gemini',
-          baseUrl: saved?.profile?.providerConfig?.chat?.baseUrl || saved?.profile?.providerConfig?.baseUrl || '',
-          model: saved?.profile?.providerConfig?.chat?.model || saved?.profile?.providerConfig?.model || 'gemini-3.1-flash-lite',
-          apiKey: saved?.profile?.providerConfig?.chat?.apiKey || '',
+          provider: savedApi?.chat?.provider || saved?.profile?.providerConfig?.chat?.provider || saved?.profile?.providerConfig?.provider || 'gemini',
+          baseUrl: savedApi?.chat?.baseUrl || saved?.profile?.providerConfig?.chat?.baseUrl || saved?.profile?.providerConfig?.baseUrl || '',
+          model: savedApi?.chat?.model || saved?.profile?.providerConfig?.chat?.model || saved?.profile?.providerConfig?.model || 'gemini-3.1-flash-lite',
+          apiKey: savedApi?.chat?.apiKey || saved?.profile?.providerConfig?.chat?.apiKey || '',
         },
         stt: {
-          provider: saved?.profile?.providerConfig?.stt?.provider || (saved?.profile?.providerConfig?.sttBaseUrl ? 'openai-compatible' : 'gemini'),
-          baseUrl: saved?.profile?.providerConfig?.stt?.baseUrl || saved?.profile?.providerConfig?.sttBaseUrl || '',
-          model: saved?.profile?.providerConfig?.stt?.model || saved?.profile?.providerConfig?.sttModel || 'gemini-3.5-transcribe',
-          apiKey: saved?.profile?.providerConfig?.stt?.apiKey || '',
+          provider: savedApi?.stt?.provider || saved?.profile?.providerConfig?.stt?.provider || (saved?.profile?.providerConfig?.sttBaseUrl ? 'openai-compatible' : 'gemini'),
+          baseUrl: savedApi?.stt?.baseUrl || saved?.profile?.providerConfig?.stt?.baseUrl || saved?.profile?.providerConfig?.sttBaseUrl || '',
+          model: savedApi?.stt?.model || saved?.profile?.providerConfig?.stt?.model || saved?.profile?.providerConfig?.sttModel || 'gemini-3.5-transcribe',
+          apiKey: savedApi?.stt?.apiKey || saved?.profile?.providerConfig?.stt?.apiKey || '',
         },
         tts: {
-          provider: saved?.profile?.providerConfig?.tts?.provider || (saved?.profile?.providerConfig?.ttsBaseUrl ? 'openai-compatible' : 'gemini'),
-          baseUrl: saved?.profile?.providerConfig?.tts?.baseUrl || saved?.profile?.providerConfig?.ttsBaseUrl || '',
-          model: saved?.profile?.providerConfig?.tts?.model || saved?.profile?.providerConfig?.ttsModel || 'gemini-3.8-flash-lite-tts',
-          voice: saved?.profile?.providerConfig?.tts?.voice || saved?.profile?.providerConfig?.ttsVoice || 'Puck',
-          apiKey: saved?.profile?.providerConfig?.tts?.apiKey || '',
+          provider: savedApi?.tts?.provider || saved?.profile?.providerConfig?.tts?.provider || (saved?.profile?.providerConfig?.ttsBaseUrl ? 'openai-compatible' : 'gemini'),
+          baseUrl: savedApi?.tts?.baseUrl || saved?.profile?.providerConfig?.tts?.baseUrl || saved?.profile?.providerConfig?.ttsBaseUrl || '',
+          model: savedApi?.tts?.model || saved?.profile?.providerConfig?.tts?.model || saved?.profile?.providerConfig?.ttsModel || 'gemini-3.8-flash-lite-tts',
+          voice: savedApi?.tts?.voice || saved?.profile?.providerConfig?.tts?.voice || saved?.profile?.providerConfig?.ttsVoice || 'Puck',
+          apiKey: savedApi?.tts?.apiKey || saved?.profile?.providerConfig?.tts?.apiKey || '',
         },
       },
     },
@@ -146,6 +154,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
     micPermission: 'prompt', // 'prompt' | 'granted' | 'denied' | 'unavailable'
     micInputLevel: 0,
     voiceAmplitude: 0,
+    /** @type {string | null} */
     lastError: null,
   };
 
@@ -176,6 +185,9 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
   creature.setEmotion(state.emotions.currentMood);
 
   function saveToStorage() {
+    try {
+      localStorage.setItem(API_CONFIG_STORAGE_KEY, JSON.stringify(state.profile.providerConfig));
+    } catch {}
     try {
       const payload = {
         profile: state.profile,
@@ -214,6 +226,83 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
     }
   }
 
+  let hasLocalConfigEdits = false;
+  /** @type {any} */
+  let serverSyncTimer = null;
+  async function syncConfigToServer(immediate = false, allowEmptyOverwrite = true) {
+    if (serverSyncTimer) {
+      clearTimeout(serverSyncTimer);
+      serverSyncTimer = null;
+    }
+    const doPost = async () => {
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            providerConfig: state.profile.providerConfig,
+            allowEmptyOverwrite,
+          }),
+        });
+        if (res.ok) {
+          saveToStorage();
+        }
+      } catch {}
+    };
+    if (immediate) {
+      await doPost();
+    } else {
+      serverSyncTimer = setTimeout(doPost, 250);
+    }
+  }
+
+  // Hydrate API keys & provider config from server on startup (survives iframe storage partitioning)
+  (async function hydrateServerConfig() {
+    try {
+      const res = await fetch('/api/config');
+      if (!res.ok || hasLocalConfigEdits) return;
+      const data = await res.json();
+      if (hasLocalConfigEdits) return;
+      const sc = data?.providerConfig;
+      if (!sc) return;
+      const lc = state.profile.providerConfig;
+
+      const pick = (localVal, serverVal, def = '') => {
+        if (localVal && String(localVal).trim()) return String(localVal).trim();
+        if (serverVal && String(serverVal).trim()) return String(serverVal).trim();
+        return def;
+      };
+
+      lc.geminiApiKey = pick(lc.geminiApiKey, sc.geminiApiKey, '');
+      lc.chat = {
+        provider: sc.chat?.provider && sc.chat.provider !== 'gemini' ? sc.chat.provider : (lc.chat?.provider || 'gemini'),
+        baseUrl: pick(lc.chat?.baseUrl, sc.chat?.baseUrl, ''),
+        model: pick(lc.chat?.model, sc.chat?.model, 'gemini-3.1-flash-lite'),
+        apiKey: pick(lc.chat?.apiKey, sc.chat?.apiKey, ''),
+      };
+      lc.stt = {
+        provider: sc.stt?.provider && sc.stt.provider !== 'gemini' ? sc.stt.provider : (lc.stt?.provider || 'gemini'),
+        baseUrl: pick(lc.stt?.baseUrl, sc.stt?.baseUrl, ''),
+        model: pick(lc.stt?.model, sc.stt?.model, 'gemini-3.5-transcribe'),
+        apiKey: pick(lc.stt?.apiKey, sc.stt?.apiKey, ''),
+      };
+      lc.tts = {
+        provider: sc.tts?.provider && sc.tts.provider !== 'gemini' ? sc.tts.provider : (lc.tts?.provider || 'gemini'),
+        baseUrl: pick(lc.tts?.baseUrl, sc.tts?.baseUrl, ''),
+        model: pick(lc.tts?.model, sc.tts?.model, 'gemini-3.8-flash-lite-tts'),
+        voice: pick(lc.tts?.voice, sc.tts?.voice, 'Puck'),
+        apiKey: pick(lc.tts?.apiKey, sc.tts?.apiKey, ''),
+      };
+
+      saveToStorage();
+      // Also push any local keys back to server so server has them stored
+      if (lc.geminiApiKey || lc.chat.apiKey || lc.stt.apiKey || lc.tts.apiKey) {
+        await syncConfigToServer(true, false);
+      }
+      notifyUpdate();
+    } catch {}
+  })();
+
   function getRelationshipInfo() {
     const xp = state.relationship.xp;
     let currentTier = RELATIONSHIP_LEVELS[0];
@@ -243,24 +332,18 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
     };
   }
 
-  function addRelationshipXp(amount, reason = '') {
-    const prevLevel = getRelationshipInfo().level;
+  function addRelationshipXp(amount, _reason = '') {
     state.relationship.xp = Math.max(0, state.relationship.xp + amount);
     state.relationship.interactionsCount += 1;
-    const nextInfo = getRelationshipInfo();
-    if (nextInfo.level > prevLevel) {
-      creature.triggerAction('bounce');
-      creature.setEmotion('excited');
-      const msg =
-        state.profile.language === 'ko'
-          ? `우와! 우리 친밀도가 레벨 ${nextInfo.level} (${nextInfo.titleKo})로 올랐어요!`
-          : `Yay! Our bond grew to Level ${nextInfo.level}: ${nextInfo.titleEn}!`;
-      showSubtitle(msg, 5500);
-    }
+    getRelationshipInfo();
     saveToStorage();
     notifyUpdate();
   }
 
+  /**
+   * @param {Record<string, number>} [deltas]
+   * @param {string | null} [moodOverride]
+   */
   function adjustEmotions(deltas = {}, moodOverride = null) {
     if (deltas.happiness !== undefined) {
       state.emotions.happiness = Math.max(10, Math.min(100, state.emotions.happiness + deltas.happiness));
@@ -289,6 +372,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
     notifyUpdate();
   }
 
+  /** @type {any} */
   let subtitleTimer = null;
   function showSubtitle(text, durationMs = 6000) {
     if (subtitleTimer) clearTimeout(subtitleTimer);
@@ -313,15 +397,20 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
   // =========================================================================
   // REAL-TIME AUDIO ANALYSER FOR VOICE TTS LIP-SYNC & MICROPHONE INPUT
   // =========================================================================
+  /** @type {AudioContext | null} */
   let audioCtx = null;
+  /** @type {HTMLAudioElement | null} */
   let currentAudioEl = null;
+  /** @type {AnalyserNode | null} */
   let ttsAnalyser = null;
+  /** @type {any} */
   let ttsDataArray = null;
+  /** @type {any} */
   let synthFallbackInterval = null;
 
   function ensureAudioContext() {
     if (!audioCtx && typeof window !== 'undefined') {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      const AudioContextClass = window.AudioContext || window['webkitAudioContext'];
       if (AudioContextClass) {
         audioCtx = new AudioContextClass();
       }
@@ -332,6 +421,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
     return audioCtx;
   }
 
+  /** @type {any} */
   let talkModeResumeTimer = null;
   function scheduleTalkResume(delayMs = 450) {
     if (!state.isTalkMode) return;
@@ -422,7 +512,8 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
       });
 
       if (!res.ok) {
-        throw new Error(`TTS HTTP ${res.status}`);
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `TTS HTTP ${res.status}`);
       }
 
       const data = await res.json();
@@ -458,30 +549,19 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
       };
 
       await audio.play();
-    } catch (err) {
-      // Fallback to browser SpeechSynthesis with procedural syllable lip-sync
-      if (!state.isSpeaking) return;
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try {
-          const utter = new SpeechSynthesisUtterance(cleanText);
-          const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(cleanText);
-          utter.lang = hasKorean ? 'ko-KR' : 'en-US';
-          utter.pitch = 1.25;
-          utter.rate = 1.04;
-          let t = 0;
-          synthFallbackInterval = setInterval(() => {
-            t += 0.05;
-            const amp = 0.25 + 0.55 * Math.abs(Math.sin(t * 15.0));
-            state.voiceAmplitude = amp;
-            creature.setMouthOpenness(amp);
-          }, 50);
-          utter.onend = () => stopSpeaking();
-          utter.onerror = () => stopSpeaking();
-          window.speechSynthesis.speak(utter);
-          return;
-        } catch {}
-      }
-      stopSpeaking();
+    } catch {
+      // If TTS endpoint is unconfigured or fails after a chat message, animate mouth silently
+      // so the conversation subtitle still plays out smoothly without a disruptive error banner
+      let elapsed = 0;
+      synthFallbackInterval = setInterval(() => {
+        elapsed += 0.05;
+        const simAmp = 0.25 + 0.45 * Math.abs(Math.sin(elapsed * 14.0)) * Math.cos(elapsed * 5.0);
+        state.voiceAmplitude = simAmp;
+        creature.setMouthOpenness(simAmp);
+        if (elapsed > Math.min(3.5, Math.max(1.5, cleanText.length * 0.045))) {
+          stopSpeaking();
+        }
+      }, 50);
     }
   }
 
@@ -510,11 +590,17 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
   // =========================================================================
   // PUSH-TO-TALK / TAP-TO-TALK MICROPHONE RECORDING & GEMINI STT
   // =========================================================================
+  /** @type {MediaRecorder | null} */
   let mediaRecorder = null;
+  /** @type {MediaStream | null} */
   let micStream = null;
+  /** @type {BlobPart[]} */
   let micChunks = [];
+  /** @type {AnalyserNode | null} */
   let micAnalyser = null;
+  /** @type {any} */
   let micDataArray = null;
+  /** @type {any} */
   let micLevelInterval = null;
 
   async function startRecording() {
@@ -702,7 +788,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
             if (state.isTalkMode) scheduleTalkResume(1000);
             resolve(null);
           }
-        } catch (err) {
+        } catch (/** @type {any} */ err) {
           state.isTranscribing = false;
           state.lastError = err.message || 'Voice transcription failed.';
           setBehavior('idle');
@@ -780,6 +866,10 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
   let proactiveTimer = 0;
   let unsolicitedCountSinceUserReply = 0;
 
+  /**
+   * @param {string} text
+   * @param {{ interactionContext?: string, silentUserBubble?: boolean, fromVoice?: boolean }} [options]
+   */
   async function sendUserMessage(text, options = {}) {
     const cleanText = String(text || '').trim();
     const { interactionContext = '', silentUserBubble = false } = options;
@@ -883,7 +973,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
 
       // Speak response aloud & synchronize 3D mouth + fur
       await speakText(replyText, emotion);
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       state.isChatLoading = false;
       state.lastError = err.message || 'Unable to reach AI companion right now.';
       setBehavior('idle');
@@ -1002,9 +1092,15 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
       }
     }
 
-    // 3. Occasional Proactive Contextual Conversation (bounded & toggleable)
+    // 3. Occasional Proactive Contextual Conversation (only when an API key is configured and no error is active)
+    const hasConfiguredKey = Boolean(
+      state.profile.providerConfig?.geminiApiKey ||
+      state.profile.providerConfig?.chat?.apiKey
+    );
     const intervalSec = Math.max(35, Number(state.profile.proactiveIntervalSec) || 60);
     if (
+      hasConfiguredKey &&
+      !state.lastError &&
       state.profile.proactiveChatEnabled &&
       proactiveTimer >= intervalSec &&
       unsolicitedCountSinceUserReply < 2
@@ -1079,9 +1175,6 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
 
   function updateProfile(partial) {
     Object.assign(state.profile, partial);
-    if (partial.proactiveChatEnabled !== undefined) {
-      state.profile.proactiveChatOptIn = true;
-    }
     if (partial.eyeColor) {
       creature.setEyeColor(partial.eyeColor);
     }
@@ -1092,16 +1185,36 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
     notifyUpdate();
   }
 
-  function updateProviderConfig(partial) {
+  /**
+   * @param {any} partial
+   * @param {{ immediate?: boolean, silent?: boolean }} [options]
+   */
+  function updateProviderConfig(partial, options = {}) {
+    hasLocalConfigEdits = true;
+    const pc = state.profile.providerConfig;
     if (partial.geminiApiKey !== undefined) {
-      state.profile.providerConfig.geminiApiKey = String(partial.geminiApiKey || '').trim();
+      pc.geminiApiKey = String(partial.geminiApiKey || '').trim();
     }
-    if (partial.chat) Object.assign(state.profile.providerConfig.chat, partial.chat);
-    if (partial.stt) Object.assign(state.profile.providerConfig.stt, partial.stt);
-    if (partial.tts) Object.assign(state.profile.providerConfig.tts, partial.tts);
-    Object.assign(state.profile.providerConfig, partial);
+    if (partial.chat) {
+      pc.chat = { ...pc.chat, ...partial.chat };
+    }
+    if (partial.stt) {
+      pc.stt = { ...pc.stt, ...partial.stt };
+    }
+    if (partial.tts) {
+      pc.tts = { ...pc.tts, ...partial.tts };
+    }
+    state.lastError = null;
     saveToStorage();
-    notifyUpdate();
+    syncConfigToServer(Boolean(options.immediate), true);
+    if (!options.silent) {
+      notifyUpdate();
+    }
+  }
+
+  async function saveProviderConfigNow(partial = {}) {
+    updateProviderConfig(partial, { immediate: true });
+    await syncConfigToServer(true, true);
   }
 
   return {
@@ -1124,6 +1237,7 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
     clearHistory,
     updateProfile,
     updateProviderConfig,
+    saveProviderConfigNow,
     update,
   };
 }

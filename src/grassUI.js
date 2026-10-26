@@ -89,13 +89,14 @@ export function createGrassUI(container, state, callbacks) {
 
   let mobileControlsBtn = document.getElementById('mobile-controls-btn');
   if (!mobileControlsBtn) {
-    mobileControlsBtn = document.createElement('button');
-    mobileControlsBtn.id = 'mobile-controls-btn';
-    mobileControlsBtn.type = 'button';
-    mobileControlsBtn.className = 'mobile-controls-btn';
-    mobileControlsBtn.setAttribute('aria-label', 'Open grass brush controls');
-    mobileControlsBtn.setAttribute('aria-expanded', 'false');
-    document.body.appendChild(mobileControlsBtn);
+    const btnEl = document.createElement('button');
+    btnEl.id = 'mobile-controls-btn';
+    btnEl.type = 'button';
+    btnEl.className = 'mobile-controls-btn';
+    btnEl.setAttribute('aria-label', 'Open grass brush controls');
+    btnEl.setAttribute('aria-expanded', 'false');
+    document.body.appendChild(btnEl);
+    mobileControlsBtn = btnEl;
   }
   mobileControlsBtn.replaceChildren();
 
@@ -144,11 +145,11 @@ export function createGrassUI(container, state, callbacks) {
   function setMobileSheetOpen(open) {
     const isOpen = Boolean(open);
     container.classList.toggle('mobile-sheet-open', isOpen);
-    mobileBackdrop.classList.toggle('active', isOpen);
+    if (mobileBackdrop) mobileBackdrop.classList.toggle('active', isOpen);
     document.body.classList.toggle('mobile-sheet-active', isOpen);
     if (isMobileViewport()) {
       toggleBtn.textContent = isOpen ? 'Done' : 'Controls';
-      mobileControlsBtn.setAttribute('aria-expanded', String(isOpen));
+      if (mobileControlsBtn) mobileControlsBtn.setAttribute('aria-expanded', String(isOpen));
     } else {
       const isCollapsed = container.classList.contains('collapsed');
       toggleBtn.textContent = isCollapsed ? 'Show' : 'Hide';

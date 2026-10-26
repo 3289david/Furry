@@ -5,11 +5,16 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "moduleResolution": "bundler",
     "allowJs": true,
+    "checkJs": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "useUnknownInCatchVariables": false,
     "skipLibCheck": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "isolatedModules": true
   },
-  "include": ["src", "vite.config.ts"],
+  "include": ["src", "server.js", "sw.js", "vite.config.ts"],
   "exclude": ["node_modules", "dist", "vendor"]
 }

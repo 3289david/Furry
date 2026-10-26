@@ -2,8 +2,143 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+const CONFIG_FILE_PATH = path.join(__dirname, '.pet-config.json');
+const ENV_FILE_PATH = path.join(__dirname, '.env');
+
+// Read local .env file from disk explicitly so we know whether the user configured .env
+function readDotEnvFile() {
+  const vars = {};
+  try {
+    if (!fs.existsSync(ENV_FILE_PATH)) return vars;
+    const lines = fs.readFileSync(ENV_FILE_PATH, 'utf-8').split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      let val = trimmed.slice(eqIdx + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      if (key && val) {
+        vars[key] = val;
+      }
+    }
+  } catch {}
+  return vars;
+}
+
+// Read persisted server config (.pet-config.json) + .env fallback
+function readSavedServerConfig() {
+  const dotEnv = readDotEnvFile();
+  let fileConfig = {};
+  try {
+    if (fs.existsSync(CONFIG_FILE_PATH)) {
+      fileConfig = JSON.parse(fs.readFileSync(CONFIG_FILE_PATH, 'utf-8')) || {};
+    }
+  } catch {}
+
+  const fc = fileConfig.providerConfig || fileConfig || {};
+  return {
+    geminiApiKey: String(fc.geminiApiKey || dotEnv.GEMINI_API_KEY || '').trim(),
+    chat: {
+      provider: fc.chat?.provider || (dotEnv.CUSTOM_CHAT_BASE_URL ? 'openai-compatible' : 'gemini'),
+      baseUrl: String(fc.chat?.baseUrl || dotEnv.CUSTOM_CHAT_BASE_URL || '').trim(),
+      model: String(fc.chat?.model || dotEnv.CUSTOM_CHAT_MODEL || 'gemini-3.1-flash-lite').trim(),
+      apiKey: String(fc.chat?.apiKey || dotEnv.CUSTOM_API_KEY || dotEnv.OPENAI_API_KEY || '').trim(),
+    },
+    stt: {
+      provider: fc.stt?.provider || (dotEnv.CUSTOM_STT_BASE_URL ? 'openai-compatible' : 'gemini'),
+      baseUrl: String(fc.stt?.baseUrl || dotEnv.CUSTOM_STT_BASE_URL || '').trim(),
+      model: String(fc.stt?.model || dotEnv.CUSTOM_STT_MODEL || 'gemini-3.5-transcribe').trim(),
+      apiKey: String(fc.stt?.apiKey || dotEnv.CUSTOM_API_KEY || dotEnv.OPENAI_API_KEY || '').trim(),
+    },
+    tts: {
+      provider: fc.tts?.provider || (dotEnv.CUSTOM_TTS_BASE_URL ? 'openai-compatible' : 'gemini'),
+      baseUrl: String(fc.tts?.baseUrl || dotEnv.CUSTOM_TTS_BASE_URL || '').trim(),
+      model: String(fc.tts?.model || dotEnv.CUSTOM_TTS_MODEL || 'gemini-3.8-flash-lite-tts').trim(),
+      voice: String(fc.tts?.voice || 'Puck').trim(),
+      apiKey: String(fc.tts?.apiKey || dotEnv.CUSTOM_API_KEY || dotEnv.OPENAI_API_KEY || '').trim(),
+    },
+  };
+}
+
+function writeEnvFileFromConfig(merged) {
+  try {
+    const existing = readDotEnvFile();
+    const nextVars = {
+      ...existing,
+      PORT: existing.PORT || '3000',
+      GEMINI_API_KEY: merged.geminiApiKey || '',
+      OPENAI_API_KEY: merged.chat?.apiKey || existing.OPENAI_API_KEY || '',
+      CUSTOM_API_KEY: merged.chat?.apiKey || merged.stt?.apiKey || merged.tts?.apiKey || '',
+      CUSTOM_CHAT_BASE_URL: merged.chat?.baseUrl || '',
+      CUSTOM_CHAT_MODEL: merged.chat?.model || 'gpt-4o-mini',
+      CUSTOM_STT_BASE_URL: merged.stt?.baseUrl || '',
+      CUSTOM_STT_MODEL: merged.stt?.model || 'whisper-1',
+      CUSTOM_TTS_BASE_URL: merged.tts?.baseUrl || '',
+      CUSTOM_TTS_MODEL: merged.tts?.model || 'tts-1',
+    };
+    const lines = [
+      '# Mochi-Puff Persistent Environment Configuration',
+      `PORT=${nextVars.PORT}`,
+      `GEMINI_API_KEY=${nextVars.GEMINI_API_KEY}`,
+      `OPENAI_API_KEY=${nextVars.OPENAI_API_KEY}`,
+      `CUSTOM_API_KEY=${nextVars.CUSTOM_API_KEY}`,
+      `CUSTOM_CHAT_BASE_URL=${nextVars.CUSTOM_CHAT_BASE_URL}`,
+      `CUSTOM_CHAT_MODEL=${nextVars.CUSTOM_CHAT_MODEL}`,
+      `CUSTOM_STT_BASE_URL=${nextVars.CUSTOM_STT_BASE_URL}`,
+      `CUSTOM_STT_MODEL=${nextVars.CUSTOM_STT_MODEL}`,
+      `CUSTOM_TTS_BASE_URL=${nextVars.CUSTOM_TTS_BASE_URL}`,
+      `CUSTOM_TTS_MODEL=${nextVars.CUSTOM_TTS_MODEL}`,
+      '',
+    ];
+    fs.writeFileSync(ENV_FILE_PATH, lines.join('\n'), 'utf-8');
+  } catch {}
+}
+
+function saveServerConfig(partial = {}, allowEmptyOverwrite = false) {
+  const current = readSavedServerConfig();
+  const pickStr = (incoming, fallback) => {
+    if (incoming === undefined || incoming === null) return fallback;
+    const s = String(incoming).trim();
+    if (s !== '' || allowEmptyOverwrite) return s;
+    return fallback;
+  };
+
+  const merged = {
+    geminiApiKey: pickStr(partial.geminiApiKey, current.geminiApiKey),
+    chat: {
+      provider: pickStr(partial.chat?.provider, current.chat.provider),
+      baseUrl: pickStr(partial.chat?.baseUrl, current.chat.baseUrl),
+      model: pickStr(partial.chat?.model, current.chat.model),
+      apiKey: pickStr(partial.chat?.apiKey, current.chat.apiKey),
+    },
+    stt: {
+      provider: pickStr(partial.stt?.provider, current.stt.provider),
+      baseUrl: pickStr(partial.stt?.baseUrl, current.stt.baseUrl),
+      model: pickStr(partial.stt?.model, current.stt.model),
+      apiKey: pickStr(partial.stt?.apiKey, current.stt.apiKey),
+    },
+    tts: {
+      provider: pickStr(partial.tts?.provider, current.tts.provider),
+      baseUrl: pickStr(partial.tts?.baseUrl, current.tts.baseUrl),
+      model: pickStr(partial.tts?.model, current.tts.model),
+      voice: pickStr(partial.tts?.voice, current.tts.voice),
+      apiKey: pickStr(partial.tts?.apiKey, current.tts.apiKey),
+    },
+  };
+
+  try {
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify({ providerConfig: merged, updatedAt: Date.now() }, null, 2), 'utf-8');
+  } catch {}
+  writeEnvFileFromConfig(merged);
+  return merged;
+}
+
 const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = '0.0.0.0';
 const IS_DEV = process.argv.includes('--dev') || process.env.NODE_ENV === 'development';
 const DIST_DIR = path.join(__dirname, 'dist');
 
@@ -56,13 +191,16 @@ let cachedAIClient = null;
 let cachedAIClientKey = null;
 
 async function getGeminiClient(userKey = '') {
+  const saved = readSavedServerConfig();
   const apiKey = (typeof userKey === 'string' && userKey.trim())
     ? userKey.trim()
-    : (process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : '');
+    : saved.geminiApiKey;
 
   if (!apiKey) {
-    const err = new Error('Gemini API key is required. Please type your Gemini API key in Settings -> AI Endpoints.');
-    err.statusCode = 400;
+    const err = Object.assign(
+      new Error('No API key configured. Please enter your Gemini API key in Settings -> AI Endpoints or set GEMINI_API_KEY in a .env file (see .env.example).'),
+      { statusCode: 401 }
+    );
     throw err;
   }
   if (!cachedGenAIModule) {
@@ -142,7 +280,6 @@ function buildPetSystemInstruction(profile = {}, emotions = {}, memories = [], r
 
   return `You are ${petName}, a tiny living 2-inch fluffy creature sitting right on the user's cozy wooden desk at twilight.
 Your personality is "${personality}": ${personaDesc}
-Current Relationship Level: Level ${level} (${title}).
 Current Emotional State: ${emotionSummary}.
 Accessory worn: ${accessory}.
 
@@ -199,24 +336,36 @@ async function handleChatEndpoint(req, res) {
     return sendJson(res, 400, { error: 'Message or interaction context is required.' });
   }
 
+  // Persist any non-empty keys/config sent by client and merge with server config
+  const savedConfig = saveServerConfig(providerConfig, false);
+  const chatConfig = { ...savedConfig.chat, ...(providerConfig?.chat || {}) };
   const systemInstruction = buildPetSystemInstruction(profile, emotions, memories, relationship);
 
   // Check if Custom OpenAI-Compatible Chat Endpoint is requested
-  const chatConfig = providerConfig?.chat || {};
   const isCustomChat =
     chatConfig.provider === 'openai-compatible' ||
     (providerConfig.provider === 'openai-compatible' && (chatConfig.baseUrl || providerConfig.baseUrl));
 
   if (isCustomChat) {
-    const rawBaseUrl = String(chatConfig.baseUrl || providerConfig.baseUrl || '').trim().replace(/\/+$/, '');
+    const rawBaseUrl = String(chatConfig.baseUrl || providerConfig.baseUrl || savedConfig.chat.baseUrl || '').trim().replace(/\/+$/, '');
     if (!rawBaseUrl) {
       throw Object.assign(new Error('Custom Chat Base URL is required when using OpenAI-compatible chat.'), { statusCode: 400 });
     }
-    const customModel = String(chatConfig.model || providerConfig.model || '').trim();
-    if (!customModel) {
-      throw Object.assign(new Error('Custom Chat Model Name is required. Enter a model ID supported by your provider.'), { statusCode: 400 });
+    let customModel = String(chatConfig.model || providerConfig.model || savedConfig.chat.model || 'gpt-4o-mini').trim();
+    if (!customModel || (customModel.startsWith('gemini-') && !rawBaseUrl.includes('googleapis.com'))) {
+      customModel = 'gpt-4o-mini';
     }
-    const apiKey = chatConfig.apiKey || providerConfig.apiKey || process.env.CUSTOM_API_KEY || process.env.OPENAI_API_KEY || '';
+    const apiKey = String(
+      chatConfig.apiKey ||
+      providerConfig.apiKey ||
+      savedConfig.chat.apiKey ||
+      providerConfig.geminiApiKey ||
+      savedConfig.geminiApiKey ||
+      ''
+    ).trim();
+    if (!apiKey) {
+      throw Object.assign(new Error('No API key configured for Custom Chat endpoint. Please enter an API key in Settings -> AI Endpoints and click Save.'), { statusCode: 401 });
+    }
 
     const oaMessages = [
       {
@@ -242,24 +391,38 @@ async function handleChatEndpoint(req, res) {
       : userText;
     oaMessages.push({ role: 'user', content: finalPrompt });
 
-    const headers = { 'Content-Type': 'application/json' };
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    }
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    };
 
     const endpointUrl = rawBaseUrl.endsWith('/chat/completions')
       ? rawBaseUrl
       : `${rawBaseUrl}/chat/completions`;
 
-    const oaRes = await fetch(endpointUrl, {
+    let oaRes = await fetch(endpointUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify({
         model: customModel,
         messages: oaMessages,
         temperature: 0.85,
+        response_format: { type: 'json_object' },
       }),
     });
+
+    // Fallback if custom endpoint does not support response_format: json_object
+    if (oaRes.status === 400) {
+      oaRes = await fetch(endpointUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: customModel,
+          messages: oaMessages,
+          temperature: 0.85,
+        }),
+      });
+    }
 
     if (!oaRes.ok) {
       const errText = await oaRes.text().catch(() => '');
@@ -286,7 +449,15 @@ async function handleChatEndpoint(req, res) {
   }
 
   // Default: Google Gemini API via @google/genai
-  const userGeminiKey = chatConfig.geminiApiKey || providerConfig.geminiApiKey || body.geminiApiKey || '';
+  const userGeminiKey = String(
+    chatConfig.geminiApiKey ||
+    providerConfig.geminiApiKey ||
+    chatConfig.apiKey ||
+    body.geminiApiKey ||
+    savedConfig.geminiApiKey ||
+    savedConfig.chat.apiKey ||
+    ''
+  ).trim();
   const { ai, Type } = await getGeminiClient(userGeminiKey);
 
   const contents = [];
@@ -311,7 +482,14 @@ async function handleChatEndpoint(req, res) {
 
   const preferredModel = chatConfig?.geminiModel || providerConfig?.geminiModel || 'gemini-3.1-flash-lite';
   const modelCandidates = Array.from(
-    new Set([preferredModel, 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-3.8-flash'])
+    new Set([
+      preferredModel,
+      'gemini-3.1-flash-lite',
+      'gemini-3.8-flash',
+      'gemini-flash-latest',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+    ])
   );
 
   let lastErr = null;
@@ -363,10 +541,10 @@ async function handleChatEndpoint(req, res) {
     } catch (err) {
       lastErr = err;
       const msg = String(err?.message || '');
-      if (msg.includes('404') || msg.includes('not found') || msg.includes('not supported')) {
-        continue;
+      if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
+        break;
       }
-      break;
+      continue;
     }
   }
 
@@ -384,32 +562,46 @@ async function handleSttEndpoint(req, res) {
     return sendJson(res, 400, { error: 'audioBase64 is required for speech transcription.' });
   }
 
+  const savedConfig = saveServerConfig(providerConfig, false);
   const cleanBase64 = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;
-  const sttConfig = providerConfig?.stt || {};
+  const sttConfig = { ...savedConfig.stt, ...(providerConfig?.stt || {}) };
   const isCustomStt =
     sttConfig.provider === 'openai-compatible' ||
     (providerConfig.provider === 'openai-compatible' && (sttConfig.baseUrl || providerConfig.sttBaseUrl));
 
   if (isCustomStt) {
-    const rawSttUrl = String(sttConfig.baseUrl || providerConfig.sttBaseUrl || '').trim().replace(/\/+$/, '');
+    const rawSttUrl = String(sttConfig.baseUrl || providerConfig.sttBaseUrl || savedConfig.stt.baseUrl || '').trim().replace(/\/+$/, '');
     if (!rawSttUrl) {
       throw Object.assign(new Error('Custom STT Base URL is required when using OpenAI-compatible STT.'), { statusCode: 400 });
     }
     const endpoint = rawSttUrl.endsWith('/audio/transcriptions')
       ? rawSttUrl
       : `${rawSttUrl}/audio/transcriptions`;
-    const apiKey = sttConfig.apiKey || providerConfig.apiKey || process.env.CUSTOM_API_KEY || process.env.OPENAI_API_KEY || '';
+    const apiKey = String(
+      sttConfig.apiKey ||
+      providerConfig.apiKey ||
+      savedConfig.stt.apiKey ||
+      providerConfig.geminiApiKey ||
+      savedConfig.geminiApiKey ||
+      ''
+    ).trim();
+    if (!apiKey) {
+      throw Object.assign(new Error('No API key configured for Custom STT endpoint. Please enter an API key in Settings -> AI Endpoints and click Save.'), { statusCode: 401 });
+    }
+    let sttModel = String(sttConfig.model || providerConfig.sttModel || savedConfig.stt.model || 'whisper-1').trim();
+    if (!sttModel || sttModel.startsWith('gemini-')) {
+      sttModel = 'whisper-1';
+    }
     const audioBuffer = Buffer.from(cleanBase64, 'base64');
     const formData = new FormData();
     const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('wav') ? 'wav' : 'webm';
     formData.append('file', new Blob([audioBuffer], { type: mimeType }), `speech.${ext}`);
-    formData.append('model', sttConfig.model || providerConfig.sttModel || 'whisper-1');
+    formData.append('model', sttModel);
     if (language === 'ko' || language === 'en') {
       formData.append('language', language);
     }
 
-    const headers = {};
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    const headers = { 'Authorization': `Bearer ${apiKey}` };
 
     const sttRes = await fetch(endpoint, {
       method: 'POST',
@@ -427,12 +619,20 @@ async function handleSttEndpoint(req, res) {
     return sendJson(res, 200, {
       text: String(sttData.text || '').trim(),
       providerUsed: 'openai-compatible',
-      modelUsed: sttConfig.model || providerConfig.sttModel || 'whisper-1',
+      modelUsed: sttModel,
     });
   }
 
   // Default: Google Gemini API — gemini-3.5-transcribe
-  const userGeminiKey = sttConfig.geminiApiKey || providerConfig.geminiApiKey || body.geminiApiKey || '';
+  const userGeminiKey = String(
+    sttConfig.geminiApiKey ||
+    providerConfig.geminiApiKey ||
+    sttConfig.apiKey ||
+    body.geminiApiKey ||
+    savedConfig.geminiApiKey ||
+    savedConfig.stt.apiKey ||
+    ''
+  ).trim();
   const { ai } = await getGeminiClient(userGeminiKey);
 
   const promptText =
@@ -440,7 +640,13 @@ async function handleSttEndpoint(req, res) {
       ? 'Transcribe this spoken audio accurately in Korean (or English if spoken in English). Output ONLY the exact spoken words with no extra labels or commentary. If the audio is silent or unintelligible, output an empty string.'
       : 'Transcribe this spoken audio accurately (supports English and Korean). Output ONLY the exact spoken words with no extra labels or commentary. If the audio is silent or unintelligible, output an empty string.';
 
-  const sttModels = ['gemini-3.5-transcribe', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+  const sttModels = [
+    'gemini-3.5-transcribe',
+    'gemini-3.1-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-flash-latest',
+    'gemini-2.5-flash',
+  ];
   let lastErr = null;
 
   for (const modelName of sttModels) {
@@ -469,10 +675,10 @@ async function handleSttEndpoint(req, res) {
     } catch (err) {
       lastErr = err;
       const msg = String(err?.message || '');
-      if (msg.includes('404') || msg.includes('not found') || msg.includes('not supported')) {
-        continue;
+      if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
+        break;
       }
-      break;
+      continue;
     }
   }
 
@@ -496,26 +702,43 @@ async function handleTtsEndpoint(req, res) {
     return sendJson(res, 400, { error: 'Text is required for speech synthesis.' });
   }
 
-  const ttsConfig = providerConfig?.tts || {};
+  const savedConfig = saveServerConfig(providerConfig, false);
+  const ttsConfig = { ...savedConfig.tts, ...(providerConfig?.tts || {}) };
   const isCustomTts =
     ttsConfig.provider === 'openai-compatible' ||
     (providerConfig.provider === 'openai-compatible' && (ttsConfig.baseUrl || providerConfig.ttsBaseUrl));
 
   if (isCustomTts) {
-    const rawTtsUrl = String(ttsConfig.baseUrl || providerConfig.ttsBaseUrl || '').trim().replace(/\/+$/, '');
+    const rawTtsUrl = String(ttsConfig.baseUrl || providerConfig.ttsBaseUrl || savedConfig.tts.baseUrl || '').trim().replace(/\/+$/, '');
     if (!rawTtsUrl) {
       throw Object.assign(new Error('Custom TTS Base URL is required when using OpenAI-compatible TTS.'), { statusCode: 400 });
     }
     const endpoint = rawTtsUrl.endsWith('/audio/speech') ? rawTtsUrl : `${rawTtsUrl}/audio/speech`;
-    const apiKey = ttsConfig.apiKey || providerConfig.apiKey || process.env.CUSTOM_API_KEY || process.env.OPENAI_API_KEY || '';
-    const headers = { 'Content-Type': 'application/json' };
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    const apiKey = String(
+      ttsConfig.apiKey ||
+      providerConfig.apiKey ||
+      savedConfig.tts.apiKey ||
+      providerConfig.geminiApiKey ||
+      savedConfig.geminiApiKey ||
+      ''
+    ).trim();
+    if (!apiKey) {
+      throw Object.assign(new Error('No API key configured for Custom TTS endpoint. Please enter an API key in Settings -> AI Endpoints and click Save.'), { statusCode: 401 });
+    }
+    let ttsModel = String(ttsConfig.model || providerConfig.ttsModel || savedConfig.tts.model || 'tts-1').trim();
+    if (!ttsModel || ttsModel.startsWith('gemini-')) {
+      ttsModel = 'tts-1';
+    }
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    };
 
     const ttsRes = await fetch(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: ttsConfig.model || providerConfig.ttsModel || 'tts-1',
+        model: ttsModel,
         input: cleanText,
         voice: ttsConfig.voice || providerConfig.ttsVoice || 'nova',
         response_format: 'wav',
@@ -535,12 +758,20 @@ async function handleTtsEndpoint(req, res) {
       audioBase64: base64Audio,
       mimeType: ttsRes.headers.get('content-type') || 'audio/wav',
       providerUsed: 'openai-compatible',
-      modelUsed: ttsConfig.model || providerConfig.ttsModel || 'tts-1',
+      modelUsed: ttsModel,
     });
   }
 
   // Default: Google Gemini API — gemini-3.8-flash-lite-tts
-  const userGeminiKey = ttsConfig.geminiApiKey || providerConfig.geminiApiKey || body.geminiApiKey || '';
+  const userGeminiKey = String(
+    ttsConfig.geminiApiKey ||
+    providerConfig.geminiApiKey ||
+    ttsConfig.apiKey ||
+    body.geminiApiKey ||
+    savedConfig.geminiApiKey ||
+    savedConfig.tts.apiKey ||
+    ''
+  ).trim();
   const { ai } = await getGeminiClient(userGeminiKey);
   const safeVoice = ALLOWED_VOICES.has(voiceName) ? voiceName : 'Puck';
 
@@ -562,6 +793,14 @@ async function handleTtsEndpoint(req, res) {
     },
     {
       model: 'gemini-3.8-flash-lite-tts',
+      parts: [{ text: cleanText }],
+    },
+    {
+      model: 'gemini-3.8-flash-tts',
+      parts: [{ text: cleanText }],
+    },
+    {
+      model: 'gemini-2.5-flash-preview-tts',
       parts: [{ text: cleanText }],
     },
   ];
@@ -613,7 +852,12 @@ async function startServer() {
     try {
       const { createServer: createViteServer } = await import('vite');
       vite = await createViteServer({
-        server: { middlewareMode: true },
+        server: {
+          middlewareMode: true,
+          watch: {
+            ignored: ['**/.pet-config.json', '**/.env'],
+          },
+        },
         appType: 'mpa',
       });
       console.log('Vite development middleware attached');
@@ -636,15 +880,35 @@ async function startServer() {
       }
 
       if (pathname === '/api/health') {
+        const saved = readSavedServerConfig();
         return sendJson(res, 200, {
           status: 'ok',
-          hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+          hasGeminiKey: Boolean(saved.geminiApiKey),
           models: {
             stt: 'gemini-3.5-transcribe',
             llm: 'gemini-3.1-flash-lite',
             tts: 'gemini-3.8-flash-lite-tts',
           },
         });
+      }
+
+      if (pathname === '/api/config') {
+        if (req.method === 'GET') {
+          return sendJson(res, 200, {
+            status: 'ok',
+            providerConfig: readSavedServerConfig(),
+          });
+        }
+        if (req.method === 'POST') {
+          const body = await readJsonBody(req);
+          const incoming = body.providerConfig || body || {};
+          const saved = saveServerConfig(incoming, Boolean(body.allowEmptyOverwrite));
+          return sendJson(res, 200, {
+            status: 'ok',
+            providerConfig: saved,
+          });
+        }
+        return sendJson(res, 405, { error: 'Method not allowed' });
       }
 
       if (pathname.startsWith('/api/')) {
