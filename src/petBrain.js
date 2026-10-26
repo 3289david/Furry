@@ -19,6 +19,7 @@ export const EYE_COLOR_PRESETS = [
   { name: 'Honey Amber', color: '#b45309' },
   { name: 'Sakura Rose', color: '#be185d' },
   { name: 'Cocoa Warm', color: '#451a03' },
+  { name: 'White', color: '#ffffff' },
 ];
 
 export const ACCESSORY_OPTIONS = [
@@ -84,7 +85,10 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
       language: saved?.profile?.language || 'auto',
       eyeColor: saved?.profile?.eyeColor || '#3d285c',
       accessory: saved?.profile?.accessory || 'none',
-      proactiveChatEnabled: saved?.profile?.proactiveChatEnabled ?? true,
+      proactiveChatEnabled:
+        saved?.profile?.proactiveChatOptIn === true &&
+        saved?.profile?.proactiveChatEnabled === true,
+      proactiveChatOptIn: saved?.profile?.proactiveChatOptIn === true,
       proactiveIntervalSec: saved?.profile?.proactiveIntervalSec || 60,
       reducedMotion: saved?.profile?.reducedMotion ?? prefersReducedMotion,
       providerConfig: {
@@ -1175,6 +1179,9 @@ export function createPetBrain({ creature, simState, onStateChange, onSubtitleCh
 
   function updateProfile(partial) {
     Object.assign(state.profile, partial);
+    if (partial.proactiveChatEnabled !== undefined) {
+      state.profile.proactiveChatOptIn = true;
+    }
     if (partial.eyeColor) {
       creature.setEyeColor(partial.eyeColor);
     }

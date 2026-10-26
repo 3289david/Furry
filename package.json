@@ -1,7 +1,7 @@
 {
   "name": "fursim",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Interactive 3D WebGL2/GPGPU fur physics and Marschner hair shading simulation for a stylized creature across studio, nature, and live AR camera environments.",
   "main": "electron/main.cjs",
   "scripts": {

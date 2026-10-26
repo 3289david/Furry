@@ -2,8 +2,9 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const CONFIG_FILE_PATH = path.join(__dirname, '.pet-config.json');
-const ENV_FILE_PATH = path.join(__dirname, '.env');
+const CONFIG_DIR = process.env.MOCHI_USER_DATA_DIR || __dirname;
+const CONFIG_FILE_PATH = path.join(CONFIG_DIR, '.pet-config.json');
+const ENV_FILE_PATH = path.join(CONFIG_DIR, '.env');
 
 // Read local .env file from disk explicitly so we know whether the user configured .env
 function readDotEnvFile() {
@@ -138,7 +139,7 @@ function saveServerConfig(partial = {}, allowEmptyOverwrite = false) {
 }
 
 const PORT = Number(process.env.PORT) || 3000;
-const HOST = '0.0.0.0';
+const HOST = process.env.HOST || '0.0.0.0';
 const IS_DEV = process.argv.includes('--dev') || process.env.NODE_ENV === 'development';
 const DIST_DIR = path.join(__dirname, 'dist');
 
@@ -351,9 +352,9 @@ async function handleChatEndpoint(req, res) {
     if (!rawBaseUrl) {
       throw Object.assign(new Error('Custom Chat Base URL is required when using OpenAI-compatible chat.'), { statusCode: 400 });
     }
-    let customModel = String(chatConfig.model || providerConfig.model || savedConfig.chat.model || 'gpt-4o-mini').trim();
+    const customModel = String(chatConfig.model || providerConfig.model || savedConfig.chat.model || '').trim();
     if (!customModel || (customModel.startsWith('gemini-') && !rawBaseUrl.includes('googleapis.com'))) {
-      customModel = 'gpt-4o-mini';
+      throw Object.assign(new Error('Custom Chat Model Name is required. Enter a model ID supported by your provider.'), { statusCode: 400 });
     }
     const apiKey = String(
       chatConfig.apiKey ||
@@ -400,29 +401,15 @@ async function handleChatEndpoint(req, res) {
       ? rawBaseUrl
       : `${rawBaseUrl}/chat/completions`;
 
-    let oaRes = await fetch(endpointUrl, {
+    const oaRes = await fetch(endpointUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify({
         model: customModel,
         messages: oaMessages,
         temperature: 0.85,
-        response_format: { type: 'json_object' },
       }),
     });
-
-    // Fallback if custom endpoint does not support response_format: json_object
-    if (oaRes.status === 400) {
-      oaRes = await fetch(endpointUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: customModel,
-          messages: oaMessages,
-          temperature: 0.85,
-        }),
-      });
-    }
 
     if (!oaRes.ok) {
       const errText = await oaRes.text().catch(() => '');

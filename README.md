@@ -30,6 +30,7 @@ Mochi-Puff can be run and packaged directly as a native standalone desktop appli
   npm run build:exe
   ```
   This creates a portable executable and an installable Windows installer in `dist-desktop/`. The installed app opens in its own window and starts its local server invisibly.
+  The Windows app stores its server-side API configuration in Electron's per-user data folder.
 - Build macOS DMG & App Bundle:
   ```bash
   npm run build:dmg

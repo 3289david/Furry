@@ -60,6 +60,7 @@ async function startApp() {
   appUrl = `http://127.0.0.1:${port}`;
   process.env.PORT = String(port);
   process.env.HOST = '127.0.0.1';
+  process.env.MOCHI_USER_DATA_DIR = app.getPath('userData');
   require('../server.js');
   await waitForServer(appUrl);
 
